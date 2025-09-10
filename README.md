@@ -55,6 +55,7 @@ La interfaz en Processing permite al usuario **monitorear** y **controlar** la a
 ---
 ## ⚙️ Installation & Usage
 1. Clone this repository:
+   ```bash
 
 ## ⚙️ Instalación y uso
 1. Clonar este repositorio:
