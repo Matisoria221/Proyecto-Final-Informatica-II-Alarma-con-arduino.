@@ -56,7 +56,7 @@ La interfaz en Processing permite al usuario **monitorear** y **controlar** la a
 ## ⚙️ Installation & Usage
 1. Clone this repository:
    ```bash
-  git clone https://github.com/Matisoria221/Proyecto-Final-Informatica-II-Alarma-con-arduino..git
+   git clone https://github.com/Matisoria221/Proyecto-Final-Informatica-II-Alarma-con-arduino..git
 ## ⚙️ Instalación y uso
 1. Clonar este repositorio:
    ```bash
