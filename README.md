@@ -1,16 +1,20 @@
-# 🚨 Arduino Alarm Project with Processing Control
+# 🛡️ Arduino Home Alarm System / Sistema de Alarma Domiciliaria con Arduino
 
-This project implements a **security alarm** system based on **Arduino**, using **serial communication** with a computer running a **Processing** program.
-The Processing interface allows the user to **monitor** and **control** the alarm in real time, while the Arduino manages **two motion sensors** and **the siren**.
+## 📖 English
 
-# 🚨 Proyecto de Alarma con Arduino y Control mediante Processing
+### 📌 Project Overview
+This project consists of a **home alarm system** built with **Arduino Uno** and controlled through **serial communication** with a **PC using Processing** as the central controller.  
+The system is designed to detect intrusions using motion sensors and trigger an audible alert, while providing feedback on an LCD display and allowing user interaction through a keypad.
 
-Este proyecto implementa un sistema de **alarma de seguridad** basado en **Arduino**, con comunicación **serie** hacia una computadora que ejecuta un programa en **Processing**.  
-La interfaz en Processing permite al usuario **monitorear** y **controlar** la alarma en tiempo real, mientras que el Arduino gestiona los **dos sensores de movimiento** y la **sirena de aviso**.
+### ⚙️ Components Used
+- **Arduino Uno**  
+- **2x PIR Motion Sensors HC-SR501**  
+- **High-frequency Buzzer / Siren**  
+- **16x2 Blue LCD Display (HD44780 with I2C module)**  
+- **4x4 Matrix Keypad**  
+- **PC running Processing (for serial communication with Arduino)**  
 
----
-
-## 📌 Main Features
+## 🛠️ Main Features
 - ✅ 2 Hc-sr501 Sr501 PIR motion sensors for intrusion detection.
 - ✅ Siren as an acoustic alert system.
 - ✅ **Bidirectional serial communication** between Arduino and Processing.
@@ -20,7 +24,27 @@ La interfaz en Processing permite al usuario **monitorear** y **controlar** la a
   - Arm or disarm the system.
 - ✅ Modular structure to add more sensors or actuators.
 
-## 📌 Características principales
+## ⚙️ Installation & Usage
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/Matisoria221/Proyecto-Final-Informatica-II-Alarma-con-arduino..git
+
+---
+## 📖 Español
+
+### 📌 Descripción del Proyecto
+Este proyecto consiste en un **sistema de alarma domiciliaria** desarrollado con **Arduino Uno**, controlado mediante **comunicación serial** con una **PC utilizando Processing** como central de control.  
+El sistema está diseñado para detectar intrusiones mediante sensores de movimiento y activar una alarma sonora, mostrando información en una pantalla LCD y permitiendo interacción con un teclado matricial.
+
+### ⚙️ Componentes Utilizados
+- **Arduino Uno**  
+- **2x Sensores de Movimiento PIR HC-SR501**  
+- **Sirena o Buzzer de alta frecuencia**  
+- **Display LCD azul 16x2 (HD44780 con módulo I2C)**  
+- **Teclado Matricial 4x4**  
+- **PC con Processing (para comunicación serial con Arduino)**
+  
+## 🛠️ Características principales
 - ✅ 2 sensores de movimiento (Hc-sr501 Sr501 PIR) para detección de intrusos.  
 - ✅ Sirena como sistema de aviso acústico.  
 - ✅ Comunicación **bidireccional por puerto serie** entre Arduino y Processing.  
@@ -30,33 +54,6 @@ La interfaz en Processing permite al usuario **monitorear** y **controlar** la a
   - Activar o desactivar el sistema.  
 - ✅ Estructura modular para añadir más sensores o actuadores.  
 
----
-
-## 🛠️ Technologies Used
-  - **Arduino UNO.** (with serial communication support).
-  - **2 Hc-sr501 Sr501 PIR sensors.** (motion detection).
-  - **Siren** or high-power buzzer for alarm.
-  - **Serial Communication (USB)** between Arduino and PC.
-  - **Processing** for graphical interface and control.
-  - Languages:
-    - **C/C++ (Arduino IDE)** → Arduino firmware.
-    - **Processing (Java)** → PC user interface.
-
-## 🛠️ Tecnologías utilizadas
-- **Arduino UNO** (con soporte para comunicación serie).  
-- **2 sensores Hc-sr501 Sr501 PIR** (detección de movimiento).  
-- **Sirena** o buzzer de alta potencia para la alarma.  
-- **Comunicación Serie (USB)** entre Arduino y PC.  
-- **Processing** para interfaz gráfica y control.  
-- Lenguajes:  
-  - **C/C++ (Arduino IDE)** → firmware del Arduino.  
-  - **Processing (Java)** → interfaz de usuario en PC.  
-
----
-## ⚙️ Installation & Usage
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/Matisoria221/Proyecto-Final-Informatica-II-Alarma-con-arduino..git
 ## ⚙️ Instalación y uso
 1. Clonar este repositorio:
    ```bash
