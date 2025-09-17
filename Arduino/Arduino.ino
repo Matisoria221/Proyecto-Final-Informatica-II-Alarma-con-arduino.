@@ -21,6 +21,11 @@ Keypad pad = Keypad(makeKeymap(teclado),filaspins,columnaspins,filas,columnas);
 //Crear el objeto lcd  dirección  0x3F y 16 columnas x 2 filas
 LiquidCrystal_I2C lcd(0x3F,16,2);
 char lectura;
+char contrasena[] = "1234";//contraseña correcta
+char ingresado[4];//contraseña ingresada
+int cont=0;//variable auxiliar para contar la cantidad de digitos usados
+int intentos=0;//contador de intentos incorrectos de alarma
+bool estadoa = 0;//estado de la alarma 0=desactivada 1=activada
 
 void setup() {
   Serial.begin(9600);
@@ -33,30 +38,31 @@ void setup() {
   // Encender la luz de fondo
   lcd.backlight();
   // Mostrar mensaje inicial
-  lcd.setCursor(0, 0);
-  lcd.print("Sistema Listo");
-  lcd.setCursor(0, 1);
-  lcd.print("Ingrese codigo + A:");
+  lcd.print("Ingrese clave:");
 }
 
 void loop() {
   // Leer tecla presionada
   lectura = pad.getKey();
-  
   // Validar que se haya leído una tecla válida
   if (lectura != NO_KEY) {
-    // Limpiar la línea donde se mostrará la tecla
-    lcd.setCursor(0, 1);
-    lcd.print("Tecla: ");
-    
-    // Mostrar la tecla presionada
-    lcd.print(lectura);
-    
-    // También enviar por serial para debug
-    Serial.print("Tecla presionada: ");
-    Serial.println(lectura);
-    
-    // Pequeña pausa para evitar lecturas múltiples
-    delay(200);
+    ingresado[cont] = lectura;//Se guarda la tecla leida en contraseña ingresada
+    Serial.print(ingresado[cont]); //Se imprime en nuestro monitor serial lo que este guardado en codigo[cont]
+    cont++;
+    if(cont==4){
+      if(ingresado[0]==contrasena[0]&&ingresado[1]==contrasena[1]&&ingresado[2]==contrasena[2]&&ingresado[3]==contrasena[3]){
+        lcd.setCursor(0,1);
+        lcd.print("Clave Correcta");
+        cont=0;
+      }
+      else{
+        lcd.setCursor(0,0);
+        lcd.print("Clave Incorrecta");
+        cont=0;
+        intentos++;
+        lcd.setCursor(0,1);
+        lcd.print("Intentos restantes:",intentos-1);
+      }
+    }
   }
 }
