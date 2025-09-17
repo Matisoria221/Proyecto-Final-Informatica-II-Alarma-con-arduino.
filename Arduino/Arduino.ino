@@ -1,7 +1,11 @@
 #include <keypad.h>//libreria para teclado matricial
 #include <Wire.h>//libreria para comunicación I2C
-#include <LiquidCrystal_I2C.h>//libreria para modulo LCD con I2C
+#include <LiquidCrystal_I2C.h>//libreria para modulo LCD con I2
 
+#define buzzer 13;
+#define SensorPIR1 2;
+#define SensorPIR2 3;
+#define Sensor3 12;
 const int filas 4;
 const int columnas 4;
 char teclado[filas][columnas]{
@@ -20,18 +24,19 @@ char lectura;
 
 void setup() {
   Serial.begin(9600);
-  
+  pinMoode(buzzer,OUTPUT);
+  pinMode(SensorPIR1,INPUT);
+  pinMode(SensorPIR2,INPUT);
+  pinMode(Sensor3,INPUT);
   // Inicializar el LCD
-  lcd.init();
-  
+  lcd.init(); 
   // Encender la luz de fondo
   lcd.backlight();
-  
   // Mostrar mensaje inicial
   lcd.setCursor(0, 0);
   lcd.print("Sistema Listo");
   lcd.setCursor(0, 1);
-  lcd.print("Presiona tecla:");
+  lcd.print("Ingrese codigo + A:");
 }
 
 void loop() {
