@@ -29,6 +29,10 @@ The system is designed to detect intrusions using motion sensors and trigger an 
    ```bash
    git clone https://github.com/Matisoria221/Proyecto-Final-Informatica-II-Alarma-con-arduino..git
 
+## Esquematic
+<img width="520" height="504" alt="image" src="https://github.com/user-attachments/assets/fa2840bf-ea83-46e6-9fe6-ced986493850" />
+
+
 ---
 ## 📖 Español
 
@@ -58,3 +62,7 @@ El sistema está diseñado para detectar intrusiones mediante sensores de movimi
 1. Clonar este repositorio:
    ```bash
    git clone https://github.com/Matisoria221/Proyecto-Final-Informatica-II-Alarma-con-arduino..git
+
+## Esquemático
+<img width="520" height="504" alt="image" src="https://github.com/user-attachments/assets/c59db046-c006-452e-a069-3ea250be43a9" />
+
