@@ -4,9 +4,9 @@
 
 // Definiciones de pines
 #define BUZZER_PIN 13
-#define SENSOR_PIR1_PIN 2
+#define SENSOR_OTROS_PIN 12
 #define SENSOR_PIR2_PIN 3
-#define SENSOR_OTROS_PIN 12 // Usaremos este pin para otros sensores o un sensor PIR genérico
+#define SENSOR_PIR1_PIN 2
 
 // Constantes para Keypad
 const int FILAS = 4;
@@ -31,14 +31,19 @@ char contrasena[] = "1234";
 char ingresado[5] = "";
 int cont = 0;
 int intentos = 0;
-bool alarmaActivada = false; // Indica si el sistema está armado
-bool alarmaDisparada = false; // Indica si se detectó una intrusión
+bool alarmaActivada = false;
+bool alarmaDisparada = false;
 bool pidendoContrasena = false;
-char accion = ' '; // 'A'=activar, 'D'=desactivar
+char accion = ' ';
 
 // Auto-activación por inactividad
 unsigned long ultimaDeteccion = 0;
-const unsigned long TIEMPO_INACTIVIDAD_PARA_ACTIVAR = 3600000; // 1 hora en milisegundos
+unsigned long TIEMPO_INACTIVIDAD_PARA_ACTIVAR = 3600000; // 1 hora por defecto
+bool autoActivacionHabilitada = true; // Controla si la auto-activación está habilitada
+
+// Variables para comunicación serial
+String comandoSerial = "";
+bool comandoCompleto = false;
 
 // Clase para Sensor PIR
 class SensorPIR {
@@ -50,17 +55,16 @@ public:
     pinMode(pin, INPUT);
   }
 
-  // Verifica si hay movimiento y actualiza el tiempo de última detección
   bool detectarMovimiento() {
     if (digitalRead(pin) == HIGH) {
-      ultimaDeteccion = millis(); // Actualiza el tiempo de la última detección
+      ultimaDeteccion = millis();
       return true;
     }
     return false;
   }
 };
 
-// Objetos de sensores PIR usando la clase
+// Objetos de sensores PIR
 SensorPIR pir1(SENSOR_PIR1_PIN);
 SensorPIR pir2(SENSOR_PIR2_PIN);
 
@@ -74,6 +78,9 @@ void revisarSensores();
 void mostrarMensaje(String mensaje, int tiempo);
 void sonarBuzzerIntermitente();
 void verificarAutoActivacion();
+void procesarComandoSerial();
+void enviarEstadoSerial();
+void enviarEvento(String evento);
 
 // ====================================================================
 // SETUP
@@ -85,16 +92,37 @@ void setup() {
   lcd.init();
   lcd.backlight();
   mostrarEstado();
-  // Inicializar ultimaDeteccion con el tiempo actual para evitar activación inmediata
-  ultimaDeteccion = millis(); 
+  ultimaDeteccion = millis();
+  
+  // Enviar estado inicial
+  delay(1000);
+  enviarEstadoSerial();
+  enviarEvento("SISTEMA_INICIADO");
 }
 
 // ====================================================================
 // LOOP
 // ====================================================================
 void loop() {
+  // Leer comandos seriales
+  while (Serial.available() > 0) {
+    char c = Serial.read();
+    if (c == '\n') {
+      comandoCompleto = true;
+    } else {
+      comandoSerial += c;
+    }
+  }
+  
+  // Procesar comando serial si está completo
+  if (comandoCompleto) {
+    procesarComandoSerial();
+    comandoSerial = "";
+    comandoCompleto = false;
+  }
+  
+  // Leer teclado físico
   char tecla = pad.getKey();
-    
   if (tecla != NO_KEY) {
     if (pidendoContrasena) {
       manejarContrasena(tecla);
@@ -107,8 +135,9 @@ void loop() {
   if (alarmaActivada) {
     revisarSensores();
   } else {
-    // Si la alarma NO está activada, verificar si debe auto-activarse
-    verificarAutoActivacion();
+    if (autoActivacionHabilitada) {
+      verificarAutoActivacion();
+    }
   }
 
   // Hacer sonar el buzzer si la alarma está disparada
@@ -118,55 +147,95 @@ void loop() {
 }
 
 // ====================================================================
+// Funciones de Comunicación Serial
+// ====================================================================
+
+void procesarComandoSerial() {
+  comandoSerial.trim();
+  
+  if (comandoSerial == "GET_STATUS") {
+    enviarEstadoSerial();
+  }
+  else if (comandoSerial.startsWith("KEY:")) {//Analiza con que empieza el string recibido
+    // Simular presión de tecla desde Processing
+    char tecla = comandoSerial.charAt(4);//Extrae el caracter en la posición 4 del string 
+    if (pidendoContrasena) {
+      manejarContrasena(tecla);
+    } else {
+      manejarComando(tecla);
+    }
+  }
+  else if (comandoSerial.startsWith("SET_AUTO:")) {//Analiza con que empieza el string recibido
+    // Habilitar/deshabilitar auto-activación
+    int valor = comandoSerial.substring(9).toInt();
+    autoActivacionHabilitada = (valor == 1);
+    enviarEvento(autoActivacionHabilitada ? "AUTO_ACTIVACION_HABILITADA" : "AUTO_ACTIVACION_DESHABILITADA");
+    enviarEstadoSerial();
+  }
+  else if (comandoSerial.startsWith("SET_TIME:")) {
+    // Configurar tiempo de inactividad en minutos
+    int minutos = comandoSerial.substring(9).toInt();
+    TIEMPO_INACTIVIDAD_PARA_ACTIVAR = (unsigned long)minutos * 60000;
+    enviarEvento("TIEMPO_INACTIVIDAD_CONFIGURADO:" + String(minutos));
+    enviarEstadoSerial();
+  }
+}
+
+void enviarEstadoSerial() {
+  // Formato: STATUS:alarmaActivada,alarmaDisparada,autoActivacionHabilitada,tiempoInactividad
+  Serial.print("STATUS:");
+  Serial.print(alarmaActivada ? "Activa" : "Inactiva");
+  Serial.print(",");
+  Serial.print(alarmaDisparada ? "Disparada" : "No disparada");
+  Serial.print(",");
+  Serial.print(autoActivacionHabilitada ? "Autoactivacion ON" : "Autoactivacion OFF");
+  Serial.print(",");
+  Serial.println(TIEMPO_INACTIVIDAD_PARA_ACTIVAR / 60000 "min"); // Enviar en minutos
+}
+
+void enviarEvento(String evento) {
+  Serial.print("EVENT:");
+  Serial.println(evento);
+}
+
+// ====================================================================
 // Funciones de Alarma y Sensores
 // ====================================================================
 void revisarSensores() {
-  // Us0 los métodos de la clase para revisar los sensores.
-  // El método 'detectarMovimiento' se encarga de actualizar 'ultimaDeteccion'
   if (pir1.detectarMovimiento() || pir2.detectarMovimiento()) {
-    // Intrusion detectada
-    if (!alarmaDisparada) { // Solo si no estaba ya disparada
+    if (!alarmaDisparada) {
       alarmaDisparada = true;
       lcd.clear();
       lcd.setCursor(0, 0);
       lcd.print("INTRUSION!");
       lcd.setCursor(0, 1);
       lcd.print("D=Desactivar");
-      Serial.println("ALARMA DISPARADA: MOVIMIENTO DETECTADO");
+      enviarEvento("INTRUSION_DETECTADA");
+      enviarEstadoSerial();
     }
-    // El buzzer se maneja en loop() mientras alarmaDisparada es true
   }
 }
 
 void verificarAutoActivacion() {
-  // Si la alarma no está activada y no se está pidiendo contraseña
   if (!alarmaActivada && !pidendoContrasena) {
-    // Comprobar si ha pasado el tiempo de inactividad
     if (millis() - ultimaDeteccion > TIEMPO_INACTIVIDAD_PARA_ACTIVAR) {
-      // Auto-activar alarma
       alarmaActivada = true;
-      alarmaDisparada = false; // Asegurar que no está disparada
+      alarmaDisparada = false;
       mostrarMensaje("AUTO-ACTIVADA", 2000);
-      Serial.println("ALARMA AUTO-ACTIVADA POR INACTIVIDAD");
+      enviarEvento("ALARMA_AUTO_ACTIVADA");
+      enviarEstadoSerial();
     }
   }
 }
 
 void sonarBuzzerIntermitente() {
-  // El buzzer suena de forma intermitente (patrón de 200ms encendido/apagado)
   static unsigned long tiempoAnterior = 0;
-  const long intervalo = 200; // 200 milisegundos para el pulso
+  const long intervalo = 200;
   static bool buzzerEstado = LOW;
 
   if (millis() - tiempoAnterior >= intervalo) {
-    tiempoAnterior = millis(); // Guarda el tiempo actual
-
-    if (buzzerEstado == LOW) {
-      buzzerEstado = HIGH;
-    } else {
-      buzzerEstado = LOW;
-    }
-    
+    tiempoAnterior = millis();
+    buzzerEstado = !buzzerEstado;
     digitalWrite(BUZZER_PIN, buzzerEstado);
   }
 }
@@ -178,10 +247,9 @@ void manejarComando(char tecla) {
   if (tecla == 'A' && !alarmaActivada) {
     solicitarContrasena('A');
   }
-  else if (tecla == 'D' && (alarmaActivada || alarmaDisparada)) { // Permitir desactivar si está activa o disparada
+  else if (tecla == 'D' && (alarmaActivada || alarmaDisparada)) {
     solicitarContrasena('D');
   }
-  //Contempla casos redundantes o posibles errores del usuario
   else if (tecla == 'A' && alarmaActivada) {
     mostrarMensaje("Ya esta activa", 1500);
   }
@@ -194,13 +262,15 @@ void solicitarContrasena(char nuevaAccion) {
   accion = nuevaAccion;
   pidendoContrasena = true;
   cont = 0;
-  memset(ingresado, 0, sizeof(ingresado));//Asigna memoría en bytes 
+  memset(ingresado, 0, sizeof(ingresado));
     
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Ingrese clave:");
   lcd.setCursor(0, 1);
   lcd.print("Clave: ");
+  
+  enviarEvento(nuevaAccion == 'A' ? "SOLICITANDO_ACTIVACION" : "SOLICITANDO_DESACTIVACION");
 }
 
 void manejarContrasena(char tecla) {
@@ -208,7 +278,6 @@ void manejarContrasena(char tecla) {
     ingresado[cont] = tecla;
     cont++;
         
-    // Mostrar asteriscos
     lcd.setCursor(6 + cont - 1, 1);
     lcd.print('*');
         
@@ -217,8 +286,8 @@ void manejarContrasena(char tecla) {
     }
   }
   else if (tecla == '#') {
-    // Cancelar
     pidendoContrasena = false;
+    enviarEvento("INGRESO_CANCELADO");
     mostrarEstado();
   }
 }
@@ -235,21 +304,25 @@ void verificarContrasena() {
   if (correcta) {
     if (accion == 'A') {
       alarmaActivada = true;
-      alarmaDisparada = false; // Resetear el estado disparado
+      alarmaDisparada = false;
       mostrarMensaje("ACTIVADA!", 2000);
+      enviarEvento("ALARMA_ACTIVADA");
     } else {
       alarmaActivada = false;
-      alarmaDisparada = false; // Resetear el estado disparado
-      digitalWrite(BUZZER_PIN, LOW); // Apagar buzzer si estaba sonando
+      alarmaDisparada = false;
+      digitalWrite(BUZZER_PIN, LOW);
       mostrarMensaje("DESACTIVADA!", 2000);
-      // Al desactivar, actualizamos la última detección para reiniciar el conteo
-      ultimaDeteccion = millis(); 
+      enviarEvento("ALARMA_DESACTIVADA");
+      ultimaDeteccion = millis();
     }
     intentos = 0;
+    enviarEstadoSerial();
   } else {
     intentos++;
+    enviarEvento("CLAVE_INCORRECTA:INTENTO_" + String(intentos));
     if (intentos >= 3) {
-      mostrarMensaje("Bloqueado 5s", 5000);
+      mostrarMensaje("Bloqueado 10s", 10000);
+      enviarEvento("SISTEMA_BLOQUEADO");
       intentos = 0;
     } else {
       lcd.clear();
@@ -276,7 +349,7 @@ void mostrarEstado() {
     lcd.print("ALRMA: INTRUSION!");
   } else {
     if (alarmaActivada) {
-    lcd.print("ALARMA: ACTIVADA");
+      lcd.print("ALARMA: ACTIVADA");
     } else {
       lcd.print("ALARMA: INACTIVA");
     }
