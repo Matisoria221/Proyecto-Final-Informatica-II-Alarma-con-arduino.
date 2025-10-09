@@ -3,8 +3,9 @@
 ## 📖 English
 
 ### 📌 Project Overview
-This project consists of a **home alarm system** built with **Arduino Uno** and controlled through **serial communication** with a **PC using Processing** as the central controller.  
-The system is designed to detect intrusions using motion sensors and trigger an audible alert, while providing feedback on an LCD display and allowing user interaction through a keypad.
+This project is a **home security alarm system** based on an **Arduino Uno**, designed to detect motion through Hc-sr501 Sr501 PIR sensors and trigger an alarm signal. The system integrates a **4x4 matrix keypad**, a **16x2 I2C LCD display**, and a **buzzer** to simulate the alarm sound.
+
+Communication with a computer is established through a serial connection, where a Processing program allows the user to **activate/deactivate the alarm, log all events with date and time**, and **set up automatic activation** within a specified time range through a **graphical user interface**.
 
 ### ⚙️ Components Used
 - **Arduino Uno**  
@@ -12,17 +13,25 @@ The system is designed to detect intrusions using motion sensors and trigger an 
 - **High-frequency Buzzer / Siren**  
 - **16x2 Blue LCD Display (HD44780 with I2C module)**  
 - **4x4 Matrix Keypad**  
-- **PC running Processing (for serial communication with Arduino)**  
+- **Serial communication with a Processing application**
+- **2N2222 transisto**
+- **2 × 330 Ω resistor** 
 
 ## 🛠️ Main Features
 - ✅ 2 Hc-sr501 Sr501 PIR motion sensors for intrusion detection.
 - ✅ Siren as an acoustic alert system.
 - ✅ **Bidirectional serial communication** between Arduino and Processing.
 - ✅ Graphical interface in Processing to:
-  - Display sensor status.
-  - Receive alarm notifications.
-  - Arm or disarm the system.
+  - Manual activation/deactivation via keypad or PC interface.
+  - Event logging (activation, motion detected, deactivation, etc.) with timestamps.
+  - Automatic activation scheduling
 - ✅ Modular structure to add more sensors or actuators.
+
+ ## 🚀 How to Run
+- 1_Upload the Arduino sketch to the board.
+- 2_Open and run the Processing program.
+- 3_Set the correct serial port in the code.
+- 4_Power the system and test the keypad and PIR sensors.
 
 ## ⚙️ Installation & Usage
 1. Clone this repository:
@@ -37,8 +46,9 @@ The system is designed to detect intrusions using motion sensors and trigger an 
 ## 📖 Español
 
 ### 📌 Descripción del Proyecto
-Este proyecto consiste en un **sistema de alarma domiciliaria** desarrollado con **Arduino Uno**, controlado mediante **comunicación serial** con una **PC utilizando Processing** como central de control.  
-El sistema está diseñado para detectar intrusiones mediante sensores de movimiento y activar una alarma sonora, mostrando información en una pantalla LCD y permitiendo interacción con un teclado matricial.
+Este proyecto consiste en el desarrollo de una **alarma domiciliaria** basada en **Arduino Uno**, diseñada para detectar intrusiones mediante sensores PIR HC-SR501 y activar una señal de alarma. El sistema integra un **teclado matricial 4x4**, un **display LCD 16x2 con interfaz I2C**, y un **buzzer** que simula el sonido de la alarma.
+
+La comunicación con una computadora se realiza por **puerto serial**, donde un programa desarrollado en **Processing** permite **activar o desactivar la alarma**, **registrar eventos** con **fecha y hora**, y **configurar la activación automática** dentro de un rango horario definido por el usuario.
 
 ### ⚙️ Componentes Utilizados
 - **Arduino Uno**  
@@ -46,17 +56,25 @@ El sistema está diseñado para detectar intrusiones mediante sensores de movimi
 - **Sirena o Buzzer de alta frecuencia**  
 - **Display LCD azul 16x2 (HD44780 con módulo I2C)**  
 - **Teclado Matricial 4x4**  
-- **PC con Processing (para comunicación serial con Arduino)**
+- **Comunicación serial con software en Processing**
+- **Transistor 2N2222**
+- **2 resistencias de 330 Ω**
   
 ## 🛠️ Características principales
 - ✅ 2 sensores de movimiento (Hc-sr501 Sr501 PIR) para detección de intrusos.  
 - ✅ Sirena como sistema de aviso acústico.  
 - ✅ Comunicación **bidireccional por puerto serie** entre Arduino y Processing.  
 - ✅ Interfaz gráfica en Processing para:  
-  - Visualizar estado de sensores.  
-  - Recibir notificaciones de alarma.  
-  - Activar o desactivar el sistema.  
-- ✅ Estructura modular para añadir más sensores o actuadores.  
+  - Activación/desactivación manual mediante teclado o interfaz gráfica en PC. 
+  - Registro de eventos (activación, detección de movimiento, desactivación, etc.) con marca temporal. 
+  - Configuración horaria para activación automática.  
+- ✅ Estructura modular para añadir más sensores o actuadores.
+
+## 🚀 Cómo ejecutar
+- 1_Cargar el código de Arduino en la placa.
+- 2_Ejecutar el programa de Processing en la PC.
+- 3_Configurar el puerto serial correcto en el código.
+- 4_Encender el sistema y probar las funciones del teclado y sensores PIR.  
 
 ## ⚙️ Instalación y uso
 1. Clonar este repositorio:
