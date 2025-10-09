@@ -39,7 +39,8 @@ Communication with a computer is established through a serial connection, where 
    git clone https://github.com/Matisoria221/Proyecto-Final-Informatica-II-Alarma-con-arduino..git
 
 ## Esquematic
-<img width="520" height="504" alt="image" src="https://github.com/user-attachments/assets/fa2840bf-ea83-46e6-9fe6-ced986493850" />
+<img width="511" height="503" alt="image" src="https://github.com/user-attachments/assets/a2d8df76-4687-4724-8952-7927e2b7f7c9" />
+
 
 
 ---
@@ -82,5 +83,6 @@ La comunicación con una computadora se realiza por **puerto serial**, donde un 
    git clone https://github.com/Matisoria221/Proyecto-Final-Informatica-II-Alarma-con-arduino..git
 
 ## Esquemático
-<img width="520" height="504" alt="image" src="https://github.com/user-attachments/assets/c59db046-c006-452e-a069-3ea250be43a9" />
+<img width="511" height="503" alt="image" src="https://github.com/user-attachments/assets/e8f54eb6-be41-42c9-8d5b-8d24b5acc7c1" />
+
 
