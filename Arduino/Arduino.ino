@@ -190,7 +190,7 @@ void enviarEstadoSerial() {
   Serial.print(",");
   Serial.print(autoActivacionHabilitada ? "Autoactivacion ON" : "Autoactivacion OFF");
   Serial.print(",");
-  Serial.println(TIEMPO_INACTIVIDAD_PARA_ACTIVAR / 60000 "min"); // Enviar en minutos
+  Serial.println(TIEMPO_INACTIVIDAD_PARA_ACTIVAR / 60000 ); // Enviar en minutos
 }
 
 void enviarEvento(String evento) {
