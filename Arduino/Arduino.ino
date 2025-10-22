@@ -35,6 +35,9 @@ bool alarmaActivada = false;
 bool alarmaDisparada = false;
 bool pidendoContrasena = false;
 char accion = ' ';
+bool enRetardoActivacion = false; // Indica si está en el periodo de retardo
+unsigned long tiempoInicioRetardo = 0;
+const unsigned long TIEMPO_RETARDO_ACTIVACION = 30000; // 30 segundos
 
 // Auto-activación por inactividad
 unsigned long ultimaDeteccion = 0;
@@ -42,8 +45,8 @@ unsigned long TIEMPO_INACTIVIDAD_PARA_ACTIVAR = 3600000; // 1 hora por defecto
 bool autoActivacionHabilitada = true; // Controla si la auto-activación está habilitada
 
 // Variables para comunicación serial
-String comandoSerial = "";
-bool comandoCompleto = false;
+char bufferSerial[64];
+String origenAccion = "HARDWARE"; // Puede ser "HARDWARE" o "SOFTWARE"
 
 // Clase para Sensor PIR
 class SensorPIR {
@@ -78,9 +81,11 @@ void revisarSensores();
 void mostrarMensaje(String mensaje, int tiempo);
 void sonarBuzzerIntermitente();
 void verificarAutoActivacion();
-void procesarComandoSerial();
+void procesarComandoSerial(char* comando);
 void enviarEstadoSerial();
 void enviarEvento(String evento);
+void manejarRetardoActivacion();
+void sonarBuzzerRetardo();
 
 // ====================================================================
 // SETUP
@@ -105,36 +110,34 @@ void setup() {
 // ====================================================================
 void loop() {
   // Leer comandos seriales
-  while (Serial.available() > 0) {
-    char c = Serial.read();
-    if (c == '\n') {
-      comandoCompleto = true;
-    } else {
-      comandoSerial += c;
+  if (Serial.available() > 0) {
+    size_t bytesLeidos = Serial.readBytesUntil('\n', bufferSerial, 63);
+    if (bytesLeidos > 0) {
+      bufferSerial[bytesLeidos] = '\0';
+      procesarComandoSerial(bufferSerial);
     }
   }
-  
-  // Procesar comando serial si está completo
-  if (comandoCompleto) {
-    procesarComandoSerial();
-    comandoSerial = "";
-    comandoCompleto = false;
-  }
-  
+ 
   // Leer teclado físico
   char tecla = pad.getKey();
   if (tecla != NO_KEY) {
+    origenAccion = "HARDWARE"; // Marcar que viene del teclado físico
     if (pidendoContrasena) {
       manejarContrasena(tecla);
     } else {
       manejarComando(tecla);
     }
   }
-    
-  // Revisar sensores solo si alarma está activada
-  if (alarmaActivada) {
+
+   // Manejar retardo de activación
+  if (enRetardoActivacion) {
+    manejarRetardoActivacion();
+  }
+
+  // Revisar sensores solo si alarma está activada (no en retardo)
+  if (alarmaActivada && !enRetardoActivacion) {
     revisarSensores();
-  } else {
+  } else if (!alarmaActivada && !enRetardoActivacion) {
     if (autoActivacionHabilitada) {
       verificarAutoActivacion();
     }
@@ -150,31 +153,33 @@ void loop() {
 // Funciones de Comunicación Serial
 // ====================================================================
 
-void procesarComandoSerial() {
-  comandoSerial.trim();
+void procesarComandoSerial(char* comando) {
+  while (*comando == ' ' || *comando == '\r') comando++;
   
-  if (comandoSerial == "GET_STATUS") {
+  if (strcmp(comando, "GET_STATUS") == 0) {
     enviarEstadoSerial();
   }
-  else if (comandoSerial.startsWith("KEY:")) {//Analiza con que empieza el string recibido
+  else if (strncmp(comando, "KEY:", 4) == 0) {//Analiza con que empieza el string recibido
     // Simular presión de tecla desde Processing
-    char tecla = comandoSerial.charAt(4);//Extrae el caracter en la posición 4 del string 
+   char tecla = comando[4];//Extrae el caracter en la posición 4 del string 
     if (pidendoContrasena) {
       manejarContrasena(tecla);
     } else {
       manejarComando(tecla);
     }
   }
-  else if (comandoSerial.startsWith("SET_AUTO:")) {//Analiza con que empieza el string recibido
+  else if (strncmp(comando, "SET_AUTO:", 9) == 0) {
     // Habilitar/deshabilitar auto-activación
-    int valor = comandoSerial.substring(9).toInt();
+    origenAccion = "SOFTWARE";
+    int valor = atoi(&comando[9]);
     autoActivacionHabilitada = (valor == 1);
     enviarEvento(autoActivacionHabilitada ? "AUTO_ACTIVACION_HABILITADA" : "AUTO_ACTIVACION_DESHABILITADA");
     enviarEstadoSerial();
   }
-  else if (comandoSerial.startsWith("SET_TIME:")) {
+  else if (strncmp(comando, "SET_TIME:", 9) == 0) {
     // Configurar tiempo de inactividad en minutos
-    int minutos = comandoSerial.substring(9).toInt();
+    origenAccion = "SOFTWARE";
+    int minutos = atoi(&comando[9]);
     TIEMPO_INACTIVIDAD_PARA_ACTIVAR = (unsigned long)minutos * 60000;
     enviarEvento("TIEMPO_INACTIVIDAD_CONFIGURADO:" + String(minutos));
     enviarEstadoSerial();
@@ -195,7 +200,11 @@ void enviarEstadoSerial() {
 
 void enviarEvento(String evento) {
   Serial.print("EVENT:");
+  Serial.print(origenAccion);
+  Serial.print(":");
   Serial.println(evento);
+  // Resetear origen a HARDWARE por defecto después de enviar
+  origenAccion = "HARDWARE";
 }
 
 // ====================================================================
@@ -217,12 +226,15 @@ void revisarSensores() {
 }
 
 void verificarAutoActivacion() {
-  if (!alarmaActivada && !pidendoContrasena) {
+  if (!alarmaActivada && !pidendoContrasena && !enRetardoActivacion) {
     if (millis() - ultimaDeteccion > TIEMPO_INACTIVIDAD_PARA_ACTIVAR) {
-      alarmaActivada = true;
-      alarmaDisparada = false;
-      mostrarMensaje("AUTO-ACTIVADA", 2000);
-      enviarEvento("ALARMA_AUTO_ACTIVADA");
+      // Iniciar retardo de activación
+      enRetardoActivacion = true;
+      tiempoInicioRetardo = millis();
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Activando en:");
+      enviarEvento("INICIANDO_AUTO_ACTIVACION");
       enviarEstadoSerial();
     }
   }
@@ -231,6 +243,49 @@ void verificarAutoActivacion() {
 void sonarBuzzerIntermitente() {
   static unsigned long tiempoAnterior = 0;
   const long intervalo = 200;
+  static bool buzzerEstado = LOW;
+
+  if (millis() - tiempoAnterior >= intervalo) {
+    tiempoAnterior = millis();
+    buzzerEstado = !buzzerEstado;
+    digitalWrite(BUZZER_PIN, buzzerEstado);
+  }
+}
+
+// ====================================================================
+// Funciones de Retardo de Activación
+// ====================================================================
+void manejarRetardoActivacion() {
+  unsigned long tiempoTranscurrido = millis() - tiempoInicioRetardo;
+  unsigned long tiempoRestante = (TIEMPO_RETARDO_ACTIVACION - tiempoTranscurrido) / 1000;
+  
+  // Actualizar display con cuenta regresiva
+  lcd.setCursor(0, 1);
+  lcd.print("    ");
+  lcd.setCursor(0, 1);
+  lcd.print(tiempoRestante);
+  lcd.print(" segundos   ");
+  
+  // Sonar buzzer de advertencia (más lento que la alarma)
+  sonarBuzzerRetardo();
+  
+  // Verificar si terminó el retardo
+  if (tiempoTranscurrido >= TIEMPO_RETARDO_ACTIVACION) {
+    // Activar alarma
+    enRetardoActivacion = false;
+    alarmaActivada = true;
+    alarmaDisparada = false;
+    digitalWrite(BUZZER_PIN, LOW); // Apagar buzzer de retardo
+    mostrarMensaje("ALARMA ACTIVADA", 2000);
+    enviarEvento("ALARMA_ACTIVADA_POST_RETARDO");
+    enviarEstadoSerial();
+  }
+}
+
+void sonarBuzzerRetardo() {
+  // Buzzer más lento durante el retardo (500ms encendido/apagado)
+  static unsigned long tiempoAnterior = 0;
+  const long intervalo = 500;
   static bool buzzerEstado = LOW;
 
   if (millis() - tiempoAnterior >= intervalo) {
