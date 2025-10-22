@@ -229,17 +229,31 @@ void dibujarLogEventos() {
   rect(450, 460, 330, 120);
   
   // Mostrar últimos 5 eventos
-  fill(200);
-  textSize(11);
+  textSize(10);
   int y = 470;
   for (int i = max(0, eventos.size() - 5); i < eventos.size(); i++) {
     String evento = eventos.get(i);
-    if (evento.length() > 45) {
-      evento = evento.substring(0, 42) + "...";
+    
+    // Colorear según el origen
+    if (evento.contains("[TECLADO]")) {
+      fill(100, 200, 255); // Azul para hardware
+    } else if (evento.contains("[INTERFAZ]")) {
+      fill(100, 255, 100); // Verde para software
+    } else {
+      fill(200); // Gris para otros
+    }
+    
+    if (evento.length() > 48) {
+      evento = evento.substring(0, 45) + "...";
     }
     text(evento, 455, y);
     y += 20;
   }
+  
+  // Leyenda
+  textSize(9);
+  fill(150);
+  text("Azul=Teclado | Verde=Interfaz", 455, 575);
 }
 void mousePressed() {
   // Verificar clic en teclado
