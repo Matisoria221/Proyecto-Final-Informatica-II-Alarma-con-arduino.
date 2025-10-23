@@ -1,6 +1,10 @@
 import processing.serial.*;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+// Importaciones necesarias para FileWriter
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.BufferedReader;
 
 Serial puerto;
 String puertoSerial = "COM5"; // CAMBIAR AL PUERTO CORRECTO
@@ -151,8 +155,16 @@ boolean sliderDragging = false;
 PImage miImagen;
 
 void setup() {
+   // Inicializar lista
+  listaEventos = new ListaEnlazadaEventos();
+  
   size(800, 600);
-  miImagen = loadImage("Fondo.jpg"); 
+  try {
+    miImagen = loadImage("Fondo.jpg");
+  } catch (Exception e) {
+    println("No se pudo cargar la imagen de fondo");
+    miImagen = null;
+  }
   // Inicializar puerto serial
   println("Puertos disponibles:");
   printArray(Serial.list());
@@ -450,12 +462,32 @@ void agregarEvento(String evento) {
   String timestamp = sdf.format(new Date());
   String eventoCompleto = timestamp + " - " + evento;
   
-  eventos.add(eventoCompleto);
-  
-  // Guardar en archivo
-  guardarEvento(eventoCompleto);
+  // Agregar a la lista enlazada
+  listaEventos.agregar(eventoCompleto);
   
   println(eventoCompleto);
+  
+  // Verificar si es un evento crítico que requiere guardar y limpiar
+  if (esEventoCritico(evento)) {
+    println(">>> Evento crítico detectado: " + evento);
+    println(">>> Guardando lista completa y limpiando...");
+    
+    // Guardar toda la lista en el archivo (sobrescribe)
+    listaEventos.guardarEnArchivo(archivoLog);
+    
+    // Limpiar la lista enlazada
+    listaEventos.limpiar();
+    
+    println(">>> Lista limpiada. Nuevo ciclo iniciado.");
+  }
+}
+
+boolean esEventoCritico(String evento) {
+  return evento.contains("ALARMA_ACTIVADA_POST_RETARDO") ||
+         evento.contains("ALARMA_AUTO_ACTIVADA") ||
+         evento.contains("ALARMA_DESACTIVADA") ||
+         evento.contains("INTRUSION_DETECTADA") ||
+         evento.contains("SISTEMA_BLOQUEADO");
 }
 
 void guardarEvento(String evento) {
@@ -473,10 +505,13 @@ void cargarLogAnterior() {
   try {
     BufferedReader reader = createReader(archivoLog);
     String line;
+    int count = 0;
     while ((line = reader.readLine()) != null) {
-      eventos.add(line);
+      listaEventos.agregar(line);  // ✅ Usa listaEventos
+      count++;
     }
     reader.close();
+    println("Log anterior cargado: " + count + " eventos");
   } catch (Exception e) {
     println("No se pudo cargar log anterior (puede ser la primera ejecución)");
   }
@@ -499,8 +534,3 @@ void keyPressed() {
 void keyReleased() {
   teclaPresionada = -1;
 }
-
-// Importaciones necesarias para FileWriter
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.BufferedReader;
