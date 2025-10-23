@@ -37,8 +37,109 @@ int tiempoSliderY = 200;
 int tiempoSliderW = 200;
 int tiempoSliderH = 20;
 
-// Log de eventos
-ArrayList<String> eventos = new ArrayList<String>();
+// Log de eventos con lista enlazada
+class NodoEvento {
+  String evento;
+  NodoEvento siguiente;
+  
+  NodoEvento(String evento) {
+    this.evento = evento;
+    this.siguiente = null;
+  }
+}
+
+class ListaEnlazadaEventos {
+  NodoEvento cabeza;
+  NodoEvento cola;
+  int tamanio;
+  
+  ListaEnlazadaEventos() {
+    this.cabeza = null;
+    this.cola = null;
+    this.tamanio = 0;
+  }
+  
+  // Agregar evento al final de la lista
+  void agregar(String evento) {
+    NodoEvento nuevoNodo = new NodoEvento(evento);
+    
+    if (cabeza == null) {
+      cabeza = nuevoNodo;
+      cola = nuevoNodo;
+    } else {
+      cola.siguiente = nuevoNodo;
+      cola = nuevoNodo;
+    }
+    tamanio++;
+  }
+  
+  // Obtener evento en posición específica
+  String obtener(int indice) {
+    if (indice < 0 || indice >= tamanio) return null;
+    
+    NodoEvento actual = cabeza;
+    for (int i = 0; i < indice; i++) {
+      actual = actual.siguiente;
+    }
+    return actual.evento;
+  }
+  
+  // Obtener tamaño de la lista
+  int tamanio() {
+    return tamanio;
+  }
+  
+  // Limpiar toda la lista
+  void limpiar() {
+    cabeza = null;
+    cola = null;
+    tamanio = 0;
+  }
+  
+  // Guardar toda la lista en archivo
+  void guardarEnArchivo(String nombreArchivo) {
+    try {
+      PrintWriter writer = new PrintWriter(new FileWriter(sketchPath(nombreArchivo), false)); // false = sobrescribir
+      
+      NodoEvento actual = cabeza;
+      while (actual != null) {
+        writer.println(actual.evento);
+        actual = actual.siguiente;
+      }
+      
+      writer.flush();
+      writer.close();
+      println("Lista completa guardada en archivo (" + tamanio + " eventos)");
+    } catch (IOException e) {
+      println("Error al guardar lista en archivo: " + e.getMessage());
+    }
+  }
+  
+  // Obtener los últimos N eventos para mostrar
+  ArrayList<String> obtenerUltimos(int n) {
+    ArrayList<String> ultimos = new ArrayList<String>();
+    
+    if (tamanio == 0) return ultimos;
+    
+    int inicio = max(0, tamanio - n);
+    NodoEvento actual = cabeza;
+    
+    // Avanzar hasta la posición de inicio
+    for (int i = 0; i < inicio; i++) {
+      actual = actual.siguiente;
+    }
+    
+    // Recolectar los últimos n eventos
+    while (actual != null) {
+      ultimos.add(actual.evento);
+      actual = actual.siguiente;
+    }
+    
+    return ultimos;
+  }
+}
+
+ListaEnlazadaEventos listaEventos;
 PrintWriter logWriter;
 String archivoLog = "alarma_log.txt";
 
@@ -220,7 +321,7 @@ void dibujarLogEventos() {
   fill(255);
   textAlign(LEFT);
   textSize(14);
-  text("Log de Eventos:", 450, 440);
+  text("Log de Eventos (Total: " + listaEventos.tamanio() + "):", 450, 440);
   
   // Caja de log
   stroke(200);
@@ -228,11 +329,14 @@ void dibujarLogEventos() {
   fill(30);
   rect(450, 460, 330, 120);
   
+  // Obtener últimos 5 eventos
+  ArrayList<String> ultimosEventos = listaEventos.obtenerUltimos(5);
+  
   // Mostrar últimos 5 eventos
   textSize(10);
   int y = 470;
-  for (int i = max(0, eventos.size() - 5); i < eventos.size(); i++) {
-    String evento = eventos.get(i);
+  for (int i = 0; i < ultimosEventos.size(); i++) {
+    String evento = ultimosEventos.get(i);
     
     // Colorear según el origen
     if (evento.contains("[TECLADO]")) {
@@ -255,6 +359,7 @@ void dibujarLogEventos() {
   fill(150);
   text("Azul=Teclado | Verde=Interfaz", 455, 575);
 }
+
 void mousePressed() {
   // Verificar clic en teclado
   for (int i = 0; i < 4; i++) {
