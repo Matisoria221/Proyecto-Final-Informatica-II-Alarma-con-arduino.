@@ -35,9 +35,6 @@ bool alarmaActivada = false;
 bool alarmaDisparada = false;
 bool pidendoContrasena = false;
 char accion = ' ';
-bool enRetardoActivacion = false; // Indica si está en el periodo de retardo
-unsigned long tiempoInicioRetardo = 0;
-const unsigned long TIEMPO_RETARDO_ACTIVACION = 30000; // 30 segundos
 
 // Auto-activación por inactividad
 unsigned long ultimaDeteccion = 0;
@@ -84,8 +81,6 @@ void verificarAutoActivacion();
 void procesarComandoSerial(char* comando);
 void enviarEstadoSerial();
 void enviarEvento(String evento);
-void manejarRetardoActivacion();
-void sonarBuzzerRetardo();
 
 // ====================================================================
 // SETUP
@@ -126,20 +121,6 @@ void loop() {
       manejarContrasena(tecla);
     } else {
       manejarComando(tecla);
-    }
-  }
-
-   // Manejar retardo de activación
-  if (enRetardoActivacion) {
-    manejarRetardoActivacion();
-  }
-
-  // Revisar sensores solo si alarma está activada (no en retardo)
-  if (alarmaActivada && !enRetardoActivacion) {
-    revisarSensores();
-  } else if (!alarmaActivada && !enRetardoActivacion) {
-    if (autoActivacionHabilitada) {
-      verificarAutoActivacion();
     }
   }
 
@@ -226,11 +207,8 @@ void revisarSensores() {
 }
 
 void verificarAutoActivacion() {
-  if (!alarmaActivada && !pidendoContrasena && !enRetardoActivacion) {
+  if (!alarmaActivada && !pidendoContrasena) {
     if (millis() - ultimaDeteccion > TIEMPO_INACTIVIDAD_PARA_ACTIVAR) {
-      // Iniciar retardo de activación
-      enRetardoActivacion = true;
-      tiempoInicioRetardo = millis();
       lcd.clear();
       lcd.setCursor(0, 0);
       lcd.print("Activando en:");
@@ -243,49 +221,6 @@ void verificarAutoActivacion() {
 void sonarBuzzerIntermitente() {
   static unsigned long tiempoAnterior = 0;
   const long intervalo = 200;
-  static bool buzzerEstado = LOW;
-
-  if (millis() - tiempoAnterior >= intervalo) {
-    tiempoAnterior = millis();
-    buzzerEstado = !buzzerEstado;
-    digitalWrite(BUZZER_PIN, buzzerEstado);
-  }
-}
-
-// ====================================================================
-// Funciones de Retardo de Activación
-// ====================================================================
-void manejarRetardoActivacion() {
-  unsigned long tiempoTranscurrido = millis() - tiempoInicioRetardo;
-  unsigned long tiempoRestante = (TIEMPO_RETARDO_ACTIVACION - tiempoTranscurrido) / 1000;
-  
-  // Actualizar display con cuenta regresiva
-  lcd.setCursor(0, 1);
-  lcd.print("    ");
-  lcd.setCursor(0, 1);
-  lcd.print(tiempoRestante);
-  lcd.print(" segundos   ");
-  
-  // Sonar buzzer de advertencia (más lento que la alarma)
-  sonarBuzzerRetardo();
-  
-  // Verificar si terminó el retardo
-  if (tiempoTranscurrido >= TIEMPO_RETARDO_ACTIVACION) {
-    // Activar alarma
-    enRetardoActivacion = false;
-    alarmaActivada = true;
-    alarmaDisparada = false;
-    digitalWrite(BUZZER_PIN, LOW); // Apagar buzzer de retardo
-    mostrarMensaje("ALARMA ACTIVADA", 2000);
-    enviarEvento("ALARMA_ACTIVADA_POST_RETARDO");
-    enviarEstadoSerial();
-  }
-}
-
-void sonarBuzzerRetardo() {
-  // Buzzer más lento durante el retardo (500ms encendido/apagado)
-  static unsigned long tiempoAnterior = 0;
-  const long intervalo = 500;
   static bool buzzerEstado = LOW;
 
   if (millis() - tiempoAnterior >= intervalo) {
