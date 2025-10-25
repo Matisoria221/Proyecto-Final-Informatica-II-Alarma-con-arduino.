@@ -124,6 +124,15 @@ void loop() {
     }
   }
 
+   // Revisar sensores solo si alarma está activada
+  if (alarmaActivada) {
+    revisarSensores();
+  } else {
+    if (autoActivacionHabilitada) {
+      verificarAutoActivacion();
+    }
+  }
+
   // Hacer sonar el buzzer si la alarma está disparada
   if (alarmaDisparada) {
     sonarBuzzerIntermitente();
