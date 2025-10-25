@@ -1,7 +1,6 @@
 import processing.serial.*;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-// Importaciones necesarias para FileWriter
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.BufferedReader;
@@ -13,15 +12,14 @@ String puertoSerial = "COM5"; // CAMBIAR AL PUERTO CORRECTO
 boolean alarmaActivada = false;
 boolean alarmaDisparada = false;
 boolean autoActivacionHabilitada = true;
-boolean enRetardoActivacion = false;
 int tiempoInactividad = 60; // minutos
 
 // Variables de interfaz
 String[][] teclas = {
   {"1", "2", "3", "A"},
-  {"4", "5", "6", " "},
-  {"7", "8", "9", " "},
-  {" ", "0", "#", "D"}
+  {"4", "5", "6", "B"},
+  {"7", "8", "9", "C"},
+  {"*", "0", "#", "D"}
 };
 
 int teclaSize = 80;
@@ -63,7 +61,6 @@ class ListaEnlazadaEventos {
     this.tamanio = 0;
   }
   
-  // Agregar evento al final de la lista
   void agregar(String evento) {
     NodoEvento nuevoNodo = new NodoEvento(evento);
     
@@ -77,7 +74,6 @@ class ListaEnlazadaEventos {
     tamanio++;
   }
   
-  // Obtener evento en posición específica
   String obtener(int indice) {
     if (indice < 0 || indice >= tamanio) return null;
     
@@ -88,22 +84,19 @@ class ListaEnlazadaEventos {
     return actual.evento;
   }
   
-  // Obtener tamaño de la lista
   int tamanio() {
     return tamanio;
   }
   
-  // Limpiar toda la lista
   void limpiar() {
     cabeza = null;
     cola = null;
     tamanio = 0;
   }
   
-  // Guardar toda la lista en archivo
   void guardarEnArchivo(String nombreArchivo) {
     try {
-      PrintWriter writer = new PrintWriter(new FileWriter(sketchPath(nombreArchivo), false)); // false = sobrescribir
+      PrintWriter writer = new PrintWriter(new FileWriter(sketchPath(nombreArchivo), false));
       
       NodoEvento actual = cabeza;
       while (actual != null) {
@@ -119,7 +112,6 @@ class ListaEnlazadaEventos {
     }
   }
   
-  // Obtener los últimos N eventos para mostrar
   ArrayList<String> obtenerUltimos(int n) {
     ArrayList<String> ultimos = new ArrayList<String>();
     
@@ -128,12 +120,10 @@ class ListaEnlazadaEventos {
     int inicio = max(0, tamanio - n);
     NodoEvento actual = cabeza;
     
-    // Avanzar hasta la posición de inicio
     for (int i = 0; i < inicio; i++) {
       actual = actual.siguiente;
     }
     
-    // Recolectar los últimos n eventos
     while (actual != null) {
       ultimos.add(actual.evento);
       actual = actual.siguiente;
@@ -144,28 +134,23 @@ class ListaEnlazadaEventos {
 }
 
 ListaEnlazadaEventos listaEventos;
-PrintWriter logWriter;
 String archivoLog = "alarma_log.txt";
 
 // Variables de estado de interfaz
 int teclaPresionada = -1;
 boolean autoButtonHover = false;
 boolean sliderDragging = false;
-//Imagen de fondo 
 PImage miImagen;
 
 void setup() {
-   // Inicializar lista
   listaEventos = new ListaEnlazadaEventos();
-  
   size(800, 600);
-  try {
-    miImagen = loadImage("Fondo.jpg");
-  } catch (Exception e) {
-    println("No se pudo cargar la imagen de fondo");
-    miImagen = null;
+  
+  miImagen = loadImage("Fondo.jpg");
+  if (miImagen == null) {
+    println("No se encontró Fondo.jpg");
   }
-  // Inicializar puerto serial
+  
   println("Puertos disponibles:");
   printArray(Serial.list());
   
@@ -178,10 +163,8 @@ void setup() {
     agregarEvento("ERROR: No se pudo conectar con Arduino");
   }
   
-  // Cargar log existente
   cargarLogAnterior();
   
-  // Solicitar estado inicial
   delay(2000);
   if (puerto != null) {
     puerto.write("GET_STATUS\n");
@@ -189,24 +172,19 @@ void setup() {
 }
 
 void draw() {
- image(miImagen, 0, 0);
-  
-  // Título
+  background(0);
+  if (miImagen != null) {
+    image(miImagen, 0, 0);
+  }
+ 
   fill(255);
   textAlign(CENTER, CENTER);
   textSize(24);
   text("SISTEMA DE CONTROL DE ALARMA", width/2, 35);
   
-  // Dibujar teclado
   dibujarTeclado();
-  
-  // Dibujar estado de la alarma
   dibujarEstadoAlarma();
-  
-  // Dibujar controles
   dibujarControles();
-  
-  // Dibujar log de eventos
   dibujarLogEventos();
 }
 
@@ -217,35 +195,31 @@ void dibujarTeclado() {
       int x = tecladoX + j * (teclaSize + teclaMargin);
       int y = tecladoY + i * (teclaSize + teclaMargin);
       
-      // Determinar color de la tecla
       String tecla = teclas[i][j];
       if (teclaPresionada == i * 4 + j) {
-        fill(0, 0, 0);
+        fill(50, 50, 50);
       } else if (tecla.equals("A")) {
         fill(0, 150, 0);
-      } else if (tecla.equals("B")) {
-        fill(100, 100, 100);
-      } else if (tecla.equals("#")) {
+      } else if (tecla.equals("D")) {
         fill(200, 0, 0);
-      } else if (tecla.equals(" ")) {
+      } else if (tecla.equals("#")) {
+        fill(150, 100, 0);
+      } else if (tecla.equals("B") || tecla.equals("C") || tecla.equals("*")) {
         fill(100, 100, 100);
       } else {
-        fill(0,0,250);
+        fill(0, 0, 250);
       }
       
-      // Dibujar tecla
       stroke(0);
       strokeWeight(2);
       rect(x, y, teclaSize, teclaSize, 5);
       
-      // Dibujar texto
       fill(255);
       textAlign(CENTER, CENTER);
       text(tecla, x + teclaSize/2, y + teclaSize/2);
     }
   }
   
-  // Etiquetas de funciones
   fill(200);
   textSize(12);
   textAlign(LEFT);
@@ -258,48 +232,54 @@ void dibujarEstadoAlarma() {
   int x = 450;
   int y = 300;
   
-  // Caja de estado
   stroke(255);
   strokeWeight(3);
+  
+  // Debugging
+  println("Estado - Activada: " + alarmaActivada + ", Disparada: " + alarmaDisparada);
+  
+  // Prioridad: Disparada > Activada > Inactiva
   if (alarmaDisparada) {
     fill(255, 0, 0);
-  } else if (alarmaActivada) {
-    fill(0, 150, 0);
-  } else {
-    fill(100, 100, 100);
-  }
-  rect(x, y, 300, 120, 10);
-  
-  // Texto de estado
-  fill(255);
-  textSize(18);
-  textAlign(CENTER, CENTER);
-  
-  if (alarmaDisparada) {
-    text("⚠ INTRUSIÓN ⚠", x + 150, y + 40);
+    rect(x, y, 300, 120, 10);
+    
+    fill(255);
+    textSize(18);
+    textAlign(CENTER, CENTER);
+    text("¡INTRUSIÓN!", x + 150, y + 40);
     text("DETECTADA", x + 150, y + 70);
   } else if (alarmaActivada) {
+    fill(0, 150, 0);
+    rect(x, y, 300, 120, 10);
+    
+    fill(255);
+    textSize(18);
+    textAlign(CENTER, CENTER);
     text("ALARMA", x + 150, y + 40);
     text("ACTIVADA", x + 150, y + 70);
   } else {
+    fill(100, 100, 100);
+    rect(x, y, 300, 120, 10);
+    
+    fill(255);
+    textSize(18);
+    textAlign(CENTER, CENTER);
     text("ALARMA", x + 150, y + 40);
     text("INACTIVA", x + 150, y + 70);
   }
 }
 
 void dibujarControles() {
-  // Botón de auto-activación
   autoButtonHover = mouseX > autoButtonX && mouseX < autoButtonX + autoButtonW &&
-                  mouseY > autoButtonY && mouseY < autoButtonY + autoButtonH;
+                    mouseY > autoButtonY && mouseY < autoButtonY + autoButtonH;
     
   stroke(255);
   strokeWeight(2);
 
-  // Verde cuando está activa, rojo cuando está inactiva
   if (autoActivacionHabilitada) {
-    fill(autoButtonHover ? color(0, 200, 0) : color(0, 150, 0)); // Verde más claro al hacer hover
+    fill(autoButtonHover ? color(0, 200, 0) : color(0, 150, 0));
   } else {
-    fill(autoButtonHover ? color(200, 0, 0) : color(150, 0, 0)); // Rojo más claro al hacer hover
+    fill(autoButtonHover ? color(200, 0, 0) : color(150, 0, 0));
   }
 
   rect(autoButtonX, autoButtonY, autoButtonW, autoButtonH, 5);
@@ -308,21 +288,18 @@ void dibujarControles() {
   textAlign(CENTER, CENTER);
   textSize(14);
   text("Auto-Activación: " + (autoActivacionHabilitada ? "ON" : "OFF"),
-      autoButtonX + autoButtonW/2, autoButtonY + autoButtonH/2);
+       autoButtonX + autoButtonW/2, autoButtonY + autoButtonH/2);
       
-  // Slider de tiempo
   fill(255);
   textAlign(LEFT);
   textSize(16);
   text("Tiempo de Inactividad: " + tiempoInactividad + " min", tiempoSliderX, tiempoSliderY - 10);
   
-  // Barra del slider
   stroke(200);
   strokeWeight(2);
   fill(70);
   rect(tiempoSliderX, tiempoSliderY, tiempoSliderW, tiempoSliderH, 3);
   
-  // Indicador del slider
   float sliderPos = map(tiempoInactividad, 1, 180, tiempoSliderX, tiempoSliderX + tiempoSliderW);
   fill(0, 150, 200);
   noStroke();
@@ -335,28 +312,24 @@ void dibujarLogEventos() {
   textSize(14);
   text("Log de Eventos (Total: " + listaEventos.tamanio() + "):", 450, 440);
   
-  // Caja de log
   stroke(200);
   strokeWeight(1);
   fill(30);
   rect(450, 460, 330, 120);
   
-  // Obtener últimos 5 eventos
   ArrayList<String> ultimosEventos = listaEventos.obtenerUltimos(5);
   
-  // Mostrar últimos 5 eventos
   textSize(10);
   int y = 470;
   for (int i = 0; i < ultimosEventos.size(); i++) {
     String evento = ultimosEventos.get(i);
     
-    // Colorear según el origen
-    if (evento.contains("[TECLADO]")) {
-      fill(100, 200, 255); // Azul para hardware
-    } else if (evento.contains("[INTERFAZ]")) {
-      fill(100, 255, 100); // Verde para software
+    if (evento.contains("HARDWARE")) {
+      fill(100, 200, 255);
+    } else if (evento.contains("SOFTWARE")) {
+      fill(100, 255, 100);
     } else {
-      fill(200); // Gris para otros
+      fill(200);
     }
     
     if (evento.length() > 48) {
@@ -366,14 +339,12 @@ void dibujarLogEventos() {
     y += 20;
   }
   
-  // Leyenda
   textSize(9);
   fill(150);
   text("Azul=Teclado | Verde=Interfaz", 455, 575);
 }
 
 void mousePressed() {
-  // Verificar clic en teclado
   for (int i = 0; i < 4; i++) {
     for (int j = 0; j < 4; j++) {
       int x = tecladoX + j * (teclaSize + teclaMargin);
@@ -388,15 +359,14 @@ void mousePressed() {
     }
   }
   
-  // Verificar clic en botón de auto-activación
   if (autoButtonHover) {
     autoActivacionHabilitada = !autoActivacionHabilitada;
     if (puerto != null) {
       puerto.write("SET_AUTO:" + (autoActivacionHabilitada ? "1" : "0") + "\n");
     }
+    agregarEvento("SOFTWARE: Auto-activación " + (autoActivacionHabilitada ? "habilitada" : "deshabilitada"));
   }
   
-  // Verificar clic en slider
   if (mouseX > tiempoSliderX && mouseX < tiempoSliderX + tiempoSliderW &&
       mouseY > tiempoSliderY - 10 && mouseY < tiempoSliderY + tiempoSliderH + 10) {
     sliderDragging = true;
@@ -408,10 +378,10 @@ void mouseReleased() {
   teclaPresionada = -1;
   if (sliderDragging) {
     sliderDragging = false;
-    // Enviar nuevo tiempo al Arduino
     if (puerto != null) {
       puerto.write("SET_TIME:" + tiempoInactividad + "\n");
     }
+    agregarEvento("SOFTWARE: Tiempo de inactividad configurado a " + tiempoInactividad + " min");
   }
 }
 
@@ -429,7 +399,7 @@ void actualizarSlider() {
 void enviarTecla(String tecla) {
   if (puerto != null) {
     puerto.write("KEY:" + tecla + "\n");
-    agregarEvento("Tecla presionada: " + tecla);
+    agregarEvento("SOFTWARE: Tecla presionada: " + tecla);
   }
 }
 
@@ -442,14 +412,18 @@ void serialEvent(Serial p) {
 }
 
 void procesarDatosSerial(String datos) {
+  println("Recibido: " + datos);
+  
   if (datos.startsWith("STATUS:")) {
-    // Formato: STATUS:alarmaActivada,alarmaDisparada,autoActivacionHabilitada,tiempoInactividad
+    // Formato Arduino: STATUS:Activa,Disparada,Autoactivacion ON,60
     String[] partes = split(datos.substring(7), ",");
     if (partes.length >= 4) {
-      alarmaActivada = partes[0].equals("1");
-      alarmaDisparada = partes[1].equals("1");
-      autoActivacionHabilitada = partes[2].equals("1");
-      tiempoInactividad = int(partes[3]);
+      alarmaActivada = partes[0].trim().equals("Activa");
+      alarmaDisparada = partes[1].trim().equals("Disparada");
+      autoActivacionHabilitada = partes[2].trim().contains("ON");
+      tiempoInactividad = int(trim(partes[3]));
+      
+      println("Parsed - Activada: " + alarmaActivada + ", Disparada: " + alarmaDisparada);
     }
   } else if (datos.startsWith("EVENT:")) {
     String evento = datos.substring(6);
@@ -462,20 +436,14 @@ void agregarEvento(String evento) {
   String timestamp = sdf.format(new Date());
   String eventoCompleto = timestamp + " - " + evento;
   
-  // Agregar a la lista enlazada
   listaEventos.agregar(eventoCompleto);
-  
   println(eventoCompleto);
   
-  // Verificar si es un evento crítico que requiere guardar y limpiar
   if (esEventoCritico(evento)) {
     println(">>> Evento crítico detectado: " + evento);
     println(">>> Guardando lista completa y limpiando...");
     
-    // Guardar toda la lista en el archivo (sobrescribe)
     listaEventos.guardarEnArchivo(archivoLog);
-    
-    // Limpiar la lista enlazada
     listaEventos.limpiar();
     
     println(">>> Lista limpiada. Nuevo ciclo iniciado.");
@@ -483,22 +451,10 @@ void agregarEvento(String evento) {
 }
 
 boolean esEventoCritico(String evento) {
-  return evento.contains("ALARMA_ACTIVADA_POST_RETARDO") ||
-         evento.contains("ALARMA_AUTO_ACTIVADA") ||
+  return evento.contains("ALARMA_ACTIVADA") ||
          evento.contains("ALARMA_DESACTIVADA") ||
          evento.contains("INTRUSION_DETECTADA") ||
          evento.contains("SISTEMA_BLOQUEADO");
-}
-
-void guardarEvento(String evento) {
-  try {
-    logWriter = new PrintWriter(new FileWriter(sketchPath(archivoLog), true));
-    logWriter.println(evento);
-    logWriter.flush();
-    logWriter.close();
-  } catch (IOException e) {
-    println("Error al guardar evento: " + e.getMessage());
-  }
 }
 
 void cargarLogAnterior() {
@@ -507,7 +463,7 @@ void cargarLogAnterior() {
     String line;
     int count = 0;
     while ((line = reader.readLine()) != null) {
-      listaEventos.agregar(line);  // ✅ Usa listaEventos
+      listaEventos.agregar(line);
       count++;
     }
     reader.close();
@@ -518,7 +474,6 @@ void cargarLogAnterior() {
 }
 
 void keyPressed() {
-  // Permitir usar el teclado físico de la PC también
   String tecla = str(key).toUpperCase();
   for (int i = 0; i < 4; i++) {
     for (int j = 0; j < 4; j++) {
