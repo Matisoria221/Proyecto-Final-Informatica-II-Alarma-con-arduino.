@@ -142,7 +142,6 @@ void loop() {
 // ====================================================================
 // Funciones de Comunicación Serial
 // ====================================================================
-
 void procesarComandoSerial(char* comando) {
   while (*comando == ' ' || *comando == '\r') comando++;
   
@@ -185,7 +184,7 @@ void enviarEstadoSerial() {
   Serial.print(",");
   Serial.print(autoActivacionHabilitada ? "Autoactivacion ON" : "Autoactivacion OFF");
   Serial.print(",");
-  Serial.println(TIEMPO_INACTIVIDAD_PARA_ACTIVAR / 60000 ); // Enviar en minutos
+  Serial.println(TIEMPO_INACTIVIDAD_PARA_ACTIVAR / 60000); // Enviar en minutos
 }
 
 void enviarEvento(String evento) {
@@ -218,11 +217,22 @@ void revisarSensores() {
 void verificarAutoActivacion() {
   if (!alarmaActivada && !pidendoContrasena) {
     if (millis() - ultimaDeteccion > TIEMPO_INACTIVIDAD_PARA_ACTIVAR) {
+      // Auto-activar la alarma
+      alarmaActivada = true;
+      alarmaDisparada = false;
       lcd.clear();
       lcd.setCursor(0, 0);
-      lcd.print("Activando en:");
-      enviarEvento("INICIANDO_AUTO_ACTIVACION");
+      lcd.print("AUTO-ACTIVADA!");
+      lcd.setCursor(0, 1);
+      lcd.print("Sistema armado");
+      delay(2000);
+      
+      enviarEvento("ALARMA_AUTO_ACTIVADA");
       enviarEstadoSerial();
+      mostrarEstado();
+      
+      // Resetear timer
+      ultimaDeteccion = millis();
     }
   }
 }
@@ -243,6 +253,7 @@ void sonarBuzzerIntermitente() {
 // Funciones de Keypad y Contraseña
 // ====================================================================
 void manejarComando(char tecla) {
+  ultimaDeteccion = millis();
   if (tecla == 'A' && !alarmaActivada) {
     solicitarContrasena('A');
   }
