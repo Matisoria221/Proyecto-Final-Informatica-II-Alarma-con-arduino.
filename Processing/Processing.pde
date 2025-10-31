@@ -17,9 +17,9 @@ int tiempoInactividad = 60; // minutos
 // Variables de interfaz
 String[][] teclas = {
   {"1", "2", "3", "A"},
-  {"4", "5", "6", "B"},
-  {"7", "8", "9", "C"},
-  {"*", "0", "#", "D"}
+  {"4", "5", "6", " "},
+  {"7", "8", "9", " "},
+  {" ", "0", "#", "D"}
 };
 
 int teclaSize = 80;
@@ -204,6 +204,8 @@ void dibujarTeclado() {
         fill(200, 0, 0);
       } else if (tecla.equals("#")) {
         fill(150, 100, 0);
+      } else if (tecla.equals(" ")) {
+        fill(150);
       } else if (tecla.equals("B") || tecla.equals("C") || tecla.equals("*")) {
         fill(100, 100, 100);
       } else {
