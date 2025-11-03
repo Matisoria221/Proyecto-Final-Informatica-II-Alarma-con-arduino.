@@ -13,7 +13,17 @@ boolean alarmaActivada = false;
 boolean alarmaDisparada = false;
 boolean autoActivacionHabilitada = true;
 int tiempoInactividad = 60; // minutos
-
+// variables para cambio de contraseña 
+String archivoContrasena = "password.txt";
+String contrasenaActual = "1234";
+boolean mostrandoCambioPass = false;
+String tempPassActual = "";
+String tempNuevaPass = "";
+int faseCambioPass = 0; // 0 = verificar actual, 1 = ingresar nueva
+int intentosFallidos = 0;
+boolean bloqueadoCambioPass = false;
+long tiempoBloqueo = 0;
+final int TIEMPO_BLOQUEO_PASS = 30000; // 30 segundos
 // Variables de interfaz
 String[][] teclas = {
   {"1", "2", "3", "A"},
@@ -21,24 +31,27 @@ String[][] teclas = {
   {"7", "8", "9", " "},
   {" ", "0", "#", "D"}
 };
-
+///
 int teclaSize = 80;
 int teclaMargin = 10;
 int tecladoX = 50;
 int tecladoY = 100;
-
 // Botón de auto-activación
 int autoButtonX = 450;
 int autoButtonY = 100;
 int autoButtonW = 200;
 int autoButtonH = 50;
-
 // Control de tiempo
 int tiempoSliderX = 450;
-int tiempoSliderY = 200;
+int tiempoSliderY = 180;
 int tiempoSliderW = 200;
 int tiempoSliderH = 20;
-
+// Botón de cambio de contraseña
+int passButtonX = 450;
+int passButtonY = 220;
+int passButtonW = 200;
+int passButtonH = 50;
+boolean passButtonHover = false;
 // Log de eventos con lista enlazada
 class NodoEvento {
   String evento;
@@ -135,7 +148,6 @@ class ListaEnlazadaEventos {
 
 ListaEnlazadaEventos listaEventos;
 String archivoLog = "alarma_log.txt";
-
 // Variables de estado de interfaz
 int teclaPresionada = -1;
 boolean autoButtonHover = false;
@@ -150,6 +162,9 @@ void setup() {
   if (miImagen == null) {
     println("No se encontró Fondo.jpg");
   }
+  
+  // NUEVO: Cargar contraseña desde archivo
+  cargarContrasena();
   
   println("Puertos disponibles:");
   printArray(Serial.list());
@@ -168,13 +183,21 @@ void setup() {
   delay(2000);
   if (puerto != null) {
     puerto.write("GET_STATUS\n");
+    // NUEVO: Enviar contraseña a Arduino
+    enviarContrasenaArduino();
   }
 }
-
 void draw() {
   background(0);
   if (miImagen != null) {
     image(miImagen, 0, 0);
+  }
+  
+  // Verificar desbloqueo automático
+  if (bloqueadoCambioPass && (millis() - tiempoBloqueo >= TIEMPO_BLOQUEO_PASS)) {
+    bloqueadoCambioPass = false;
+    intentosFallidos = 0;
+    agregarEvento("SOFTWARE: Bloqueo de cambio de contraseña finalizado");
   }
  
   fill(255);
@@ -186,8 +209,188 @@ void draw() {
   dibujarEstadoAlarma();
   dibujarControles();
   dibujarLogEventos();
+  
+  // NUEVO: Mostrar diálogo de cambio de contraseña si está activo
+  if (mostrandoCambioPass) {
+    dibujarDialogoCambioPass();
+  }
 }
-
+///
+void cargarContrasena() {
+  try {
+    BufferedReader reader = createReader(archivoContrasena);
+    String line = reader.readLine();
+    if (line != null && line.length() == 4) {
+      contrasenaActual = line.trim();
+      println("Contraseña cargada: ****");
+    } else {
+      println("Formato de contraseña inválido, usando 1234");
+      contrasenaActual = "1234";
+      guardarContrasena();
+    }
+    reader.close();
+  } catch (Exception e) {
+    println("No se encontró archivo de contraseña, creando uno nuevo con 1234");
+    contrasenaActual = "1234";
+    guardarContrasena();
+  }
+}
+///
+void guardarContrasena() {
+  try {
+    PrintWriter writer = new PrintWriter(new FileWriter(sketchPath(archivoContrasena), false));
+    writer.println(contrasenaActual);
+    writer.flush();
+    writer.close();
+    println("Contraseña guardada en archivo");
+  } catch (IOException e) {
+    println("Error al guardar contraseña: " + e.getMessage());
+  }
+}
+///
+void enviarContrasenaArduino() {
+  if (puerto != null) {
+    puerto.write("SET_PASS:" + contrasenaActual + "\n");
+    println("Contraseña enviada a Arduino");
+  }
+}
+///
+void iniciarCambioContrasena() {
+  // Verificar si está bloqueado
+  if (bloqueadoCambioPass) {
+    long tiempoRestante = (TIEMPO_BLOQUEO_PASS - (millis() - tiempoBloqueo)) / 1000;
+    if (tiempoRestante > 0) {
+      agregarEvento("SOFTWARE: Intento de cambio bloqueado (" + tiempoRestante + "s restantes)");
+      return;
+    } else {
+      bloqueadoCambioPass = false;
+      intentosFallidos = 0;
+    }
+  }
+  
+  faseCambioPass = 0;
+  tempPassActual = "";
+  tempNuevaPass = "";
+  mostrandoCambioPass = true;
+  agregarEvento("SOFTWARE: Iniciando cambio de contraseña");
+}
+///
+void procesarCambioContrasena(String tecla) {
+  if (tecla.matches("[0-9]")) {
+    if (faseCambioPass == 0) {
+      // Fase 1: Verificar contraseña actual
+      tempPassActual += tecla;
+      
+      if (tempPassActual.length() == 4) {
+        if (tempPassActual.equals(contrasenaActual)) {
+          // Contraseña correcta, pasar a fase 2
+          faseCambioPass = 1;
+          tempNuevaPass = "";
+          intentosFallidos = 0;
+          agregarEvento("SOFTWARE: Contraseña actual verificada");
+        } else {
+          // Contraseña incorrecta
+          intentosFallidos++;
+          agregarEvento("SOFTWARE: Verificación fallida (Intento " + intentosFallidos + "/3)");
+          
+          if (intentosFallidos >= 3) {
+            // Bloquear cambio de contraseña
+            bloqueadoCambioPass = true;
+            tiempoBloqueo = millis();
+            agregarEvento("SOFTWARE: Cambio de contraseña bloqueado por 30 segundos");
+            mostrandoCambioPass = false;
+            faseCambioPass = 0;
+            tempPassActual = "";
+            tempNuevaPass = "";
+          } else {
+            // Reintentar
+            tempPassActual = "";
+          }
+        }
+      }
+    } else if (faseCambioPass == 1) {
+      // Fase 2: Ingresar nueva contraseña
+      tempNuevaPass += tecla;
+      
+      if (tempNuevaPass.length() == 4) {
+        // Nueva contraseña completa
+        contrasenaActual = tempNuevaPass;
+        guardarContrasena();
+        enviarContrasenaArduino();
+        agregarEvento("SOFTWARE: Contraseña cambiada exitosamente");
+        mostrandoCambioPass = false;
+        faseCambioPass = 0;
+        tempPassActual = "";
+        tempNuevaPass = "";
+        intentosFallidos = 0;
+      }
+    }
+  } else if (tecla.equals("#")) {
+    // Cancelar
+    mostrandoCambioPass = false;
+    faseCambioPass = 0;
+    tempPassActual = "";
+    tempNuevaPass = "";
+    agregarEvento("SOFTWARE: Cambio de contraseña cancelado");
+  }
+}
+///
+void dibujarDialogoCambioPass() {
+  // Fondo semitransparente
+  fill(0, 0, 0, 200);
+  rect(0, 0, width, height);
+  
+  // Cuadro de diálogo
+  fill(50, 50, 50);
+  stroke(255);
+  strokeWeight(3);
+  rect(width/2 - 150, height/2 - 100, 300, 200, 10);
+  
+  fill(255);
+  textAlign(CENTER, CENTER);
+  textSize(18);
+  text("CAMBIAR CONTRASEÑA", width/2, height/2 - 70);
+  
+  textSize(14);
+  if (faseCambioPass == 0) {
+    // Fase 1: Verificar contraseña actual
+    text("Ingrese contraseña actual:", width/2, height/2 - 40);
+    
+    // Mostrar intentos fallidos
+    if (intentosFallidos > 0) {
+      fill(255, 100, 100);
+      textSize(12);
+      text("Intentos fallidos: " + intentosFallidos + "/3", width/2, height/2 - 15);
+      fill(255);
+      textSize(14);
+    }
+  } else {
+    // Fase 2: Ingresar nueva contraseña
+    fill(100, 255, 100);
+    text("✓ Contraseña verificada", width/2, height/2 - 40);
+    fill(255);
+    text("Ingrese nueva contraseña:", width/2, height/2 - 15);
+  }
+  
+  // Mostrar asteriscos
+  String display = "";
+  String passActual = faseCambioPass == 0 ? tempPassActual : tempNuevaPass;
+  
+  for (int i = 0; i < passActual.length(); i++) {
+    display += "* ";
+  }
+  for (int i = passActual.length(); i < 4; i++) {
+    display += "_ ";
+  }
+  
+  textSize(24);
+  text(display, width/2, height/2 + 20);
+  
+  textSize(12);
+  fill(200);
+  text("Presione # para cancelar", width/2, height/2 + 70);
+}
+///
 void dibujarTeclado() {
   textSize(20);
   for (int i = 0; i < 4; i++) {
@@ -229,7 +432,7 @@ void dibujarTeclado() {
   text("D = Desactivar", tecladoX, tecladoY + 4 * (teclaSize + teclaMargin) + 40);
   text("# = Cancelar", tecladoX, tecladoY + 4 * (teclaSize + teclaMargin) + 60);
 }
-
+///
 void dibujarEstadoAlarma() {
   int x = 450;
   int y = 300;
@@ -270,7 +473,7 @@ void dibujarEstadoAlarma() {
     text("INACTIVA", x + 150, y + 70);
   }
 }
-
+///
 void dibujarControles() {
   autoButtonHover = mouseX > autoButtonX && mouseX < autoButtonX + autoButtonW &&
                     mouseY > autoButtonY && mouseY < autoButtonY + autoButtonH;
@@ -291,7 +494,28 @@ void dibujarControles() {
   textSize(14);
   text("Auto-Activación: " + (autoActivacionHabilitada ? "ON" : "OFF"),
        autoButtonX + autoButtonW/2, autoButtonY + autoButtonH/2);
+  
+  // NUEVO: Botón de cambio de contraseña
+  passButtonHover = mouseX > passButtonX && mouseX < passButtonX + passButtonW &&
+                    mouseY > passButtonY && mouseY < passButtonY + passButtonH;
+  
+  // Cambiar color si está bloqueado
+  if (bloqueadoCambioPass) {
+    fill(passButtonHover ? color(150, 50, 50) : color(100, 30, 30));
+  } else {
+    fill(passButtonHover ? color(100, 100, 200) : color(70, 70, 150));
+  }
+  rect(passButtonX, passButtonY, passButtonW, passButtonH, 5);
+  
+  fill(255);
+  if (bloqueadoCambioPass) {
+    int segundosRestantes = (int)((TIEMPO_BLOQUEO_PASS - (millis() - tiempoBloqueo)) / 1000);
+    text("Bloqueado (" + segundosRestantes + "s)", passButtonX + passButtonW/2, passButtonY + passButtonH/2);
+  } else {
+    text("Cambiar Contraseña", passButtonX + passButtonW/2, passButtonY + passButtonH/2);
+  }
       
+  // Slider de tiempo
   fill(255);
   textAlign(LEFT);
   textSize(16);
@@ -307,7 +531,7 @@ void dibujarControles() {
   noStroke();
   ellipse(sliderPos, tiempoSliderY + tiempoSliderH/2, 20, 20);
 }
-
+///
 void dibujarLogEventos() {
   fill(255);
   textAlign(LEFT);
@@ -347,6 +571,11 @@ void dibujarLogEventos() {
 }
 
 void mousePressed() {
+  if (mostrandoCambioPass) {
+    // No permitir otras interacciones mientras se cambia la contraseña
+    return;
+  }
+  
   for (int i = 0; i < 4; i++) {
     for (int j = 0; j < 4; j++) {
       int x = tecladoX + j * (teclaSize + teclaMargin);
@@ -369,13 +598,18 @@ void mousePressed() {
     agregarEvento("SOFTWARE: Auto-activación " + (autoActivacionHabilitada ? "habilitada" : "deshabilitada"));
   }
   
+  // NUEVO: Botón de cambio de contraseña
+  if (passButtonHover && !bloqueadoCambioPass) {
+    iniciarCambioContrasena();
+  }
+  
   if (mouseX > tiempoSliderX && mouseX < tiempoSliderX + tiempoSliderW &&
       mouseY > tiempoSliderY - 10 && mouseY < tiempoSliderY + tiempoSliderH + 10) {
     sliderDragging = true;
     actualizarSlider();
   }
 }
-
+///
 void mouseReleased() {
   teclaPresionada = -1;
   if (sliderDragging) {
@@ -417,22 +651,35 @@ void procesarDatosSerial(String datos) {
   println("Recibido: " + datos);
   
   if (datos.startsWith("STATUS:")) {
-    // Formato Arduino: STATUS:Activa,Disparada,Autoactivacion ON,60
     String[] partes = split(datos.substring(7), ",");
     if (partes.length >= 4) {
       alarmaActivada = partes[0].trim().equals("Activa");
       alarmaDisparada = partes[1].trim().equals("Disparada");
       autoActivacionHabilitada = partes[2].trim().contains("ON");
       tiempoInactividad = int(trim(partes[3]));
-      
-      println("Parsed - Activada: " + alarmaActivada + ", Disparada: " + alarmaDisparada);
     }
-  } else if (datos.startsWith("EVENT:")) {
+  } 
+  else if (datos.startsWith("EVENT:")) {
     String evento = datos.substring(6);
     agregarEvento(evento);
+    
+    // Detectar eventos de bloqueo desde Arduino
+    if (evento.contains("SISTEMA_BLOQUEADO_CAMBIO_PASS_ALARMA_ACTIVADA")) {
+      // Sincronizar el bloqueo en Processing (informativo)
+      agregarEvento("SOFTWARE: Arduino bloqueado por intentos fallidos de cambio de contraseña");
+    }
+  }
+  else if (datos.startsWith("NEW_PASS:")) {
+    // NUEVO: Recibir nueva contraseña desde Arduino
+    String nuevaPass = datos.substring(9).trim();
+    if (nuevaPass.length() == 4) {
+      contrasenaActual = nuevaPass;
+      guardarContrasena();
+      agregarEvento("HARDWARE: Contraseña cambiada desde teclado físico");
+    }
   }
 }
-
+///
 void agregarEvento(String evento) {
   SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
   String timestamp = sdf.format(new Date());
@@ -477,6 +724,13 @@ void cargarLogAnterior() {
 
 void keyPressed() {
   String tecla = str(key).toUpperCase();
+  
+  if (mostrandoCambioPass) {
+    // Modo cambio de contraseña
+    procesarCambioContrasena(tecla);
+    return;
+  }
+  
   for (int i = 0; i < 4; i++) {
     for (int j = 0; j < 4; j++) {
       if (teclas[i][j].equals(tecla)) {
@@ -487,7 +741,7 @@ void keyPressed() {
     }
   }
 }
-
+///
 void keyReleased() {
   teclaPresionada = -1;
 }
