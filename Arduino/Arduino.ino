@@ -26,9 +26,21 @@ Keypad pad = Keypad(makeKeymap(TECLADO), FILAS_PINS, COLUMNAS_PINS, FILAS, COLUM
 // Objeto LCD I2C
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
-// Contraseña y variables de estado
-char contrasena[] = "1234";
+//Variables de contraseña
 char ingresado[5] = "";
+bool cambiandoContrasena = false;
+char nuevaContrasena[5] = {0, 0, 0, 0, 0};
+char contrasenaVerificacion[5] = {0, 0, 0, 0, 0};
+int contNuevaPass = 0;
+int faseCambioPass = 0; // 0 = verificar actual, 1 = ingresar nueva
+int intentosCambioPass = 0;
+//variables de estado 
+bool bloqueadoCambioPass = false;
+unsigned long tiempoBloqueoPass = 0;
+const unsigned long DURACION_BLOQUEO_PASS = 30000; // 30 segundos
+bool alarmaActivadaAntes = false; // Para restaurar estado después del bloqueo
+unsigned long tiempoPulsacionC = 0;
+const unsigned long TIEMPO_MANTENER_C = 3000; // 3 segundos
 int cont = 0;
 int intentos = 0;
 bool alarmaActivada = false;
@@ -39,7 +51,7 @@ char accion = ' ';
 // Auto-activación por inactividad
 unsigned long ultimaDeteccion = 0;
 unsigned long TIEMPO_INACTIVIDAD_PARA_ACTIVAR = 3600000; // 1 hora por defecto
-bool autoActivacionHabilitada = true; // Controla si la auto-activación está habilitada
+bool autoActivacionHabilitada = false; // Controla si la auto-activación está habilitada
 
 // Variables para comunicación serial
 char bufferSerial[64];
@@ -77,7 +89,6 @@ void loop() {
       procesarComandoSerial(bufferSerial);
     }
   }
- 
   // Leer teclado físico
   char tecla = pad.getKey();
   if (tecla != NO_KEY) {
@@ -88,18 +99,12 @@ void loop() {
       manejarComando(tecla);
     }
   }
-
-   // Revisar sensores solo si alarma está activada
+  // Revisar sensores solo si alarma está activada
   if (alarmaActivada) {
     revisarSensores();
   } else {
     if (autoActivacionHabilitada) {
       verificarAutoActivacion();
     }
-  }
-
-  // Hacer sonar el buzzer si la alarma está disparada
-  if (alarmaDisparada) {
-    sonarBuzzerIntermitente();
   }
 }
