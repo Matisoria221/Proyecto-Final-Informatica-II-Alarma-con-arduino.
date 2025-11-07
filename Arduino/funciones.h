@@ -234,10 +234,6 @@ void verificarCambioContrasena() {
     }
     return; // No permitir verificar tecla C mientras está bloqueado
   }
-  // Hacer sonar el buzzer si la alarma está disparada
-  if (alarmaDisparada) {
-    sonarBuzzerIntermitente();
-  }
 }
 ////
 void manejarCambioContrasena(char tecla) {
