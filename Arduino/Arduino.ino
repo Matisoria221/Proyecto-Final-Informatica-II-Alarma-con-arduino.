@@ -27,6 +27,7 @@ Keypad pad = Keypad(makeKeymap(TECLADO), FILAS_PINS, COLUMNAS_PINS, FILAS, COLUM
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 //Variables de contraseña
+char contrasena [4];
 char ingresado[5] = "";
 bool cambiandoContrasena = false;
 char nuevaContrasena[5] = {0, 0, 0, 0, 0};
@@ -106,5 +107,9 @@ void loop() {
     if (autoActivacionHabilitada) {
       verificarAutoActivacion();
     }
+  }
+  // Hacer sonar el buzzer si la alarma está disparada
+  if (alarmaDisparada) {
+    sonarBuzzerIntermitente();
   }
 }
