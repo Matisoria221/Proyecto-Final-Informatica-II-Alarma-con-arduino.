@@ -54,26 +54,25 @@ int passButtonH = 50;
 boolean passButtonHover = false;
 // Log de eventos con lista enlazada
 class NodoEvento {
-  String evento;
-  NodoEvento siguiente;
+  String evento; // Datos
+  NodoEvento siguiente; 
   
   NodoEvento(String evento) {
     this.evento = evento;
-    this.siguiente = null;
+    this.siguiente = null; // Inicialmente no apunta a nadie
   }
 }
 
 class ListaEnlazadaEventos {
-  NodoEvento cabeza;
-  NodoEvento cola;
-  int tamanio;
+  NodoEvento cabeza; // Primer nodo de la lista
+  NodoEvento cola; // Último nodo de la lista
+  int tamanio; // Contador de elementos
   
   ListaEnlazadaEventos() {
     this.cabeza = null;
     this.cola = null;
     this.tamanio = 0;
   }
-  
   void agregar(String evento) {
     NodoEvento nuevoNodo = new NodoEvento(evento);
     
@@ -86,27 +85,23 @@ class ListaEnlazadaEventos {
     }
     tamanio++;
   }
-  
   String obtener(int indice) {
     if (indice < 0 || indice >= tamanio) return null;
-    
+ 
     NodoEvento actual = cabeza;
     for (int i = 0; i < indice; i++) {
       actual = actual.siguiente;
     }
     return actual.evento;
-  }
-  
+  } 
   int tamanio() {
     return tamanio;
   }
-  
   void limpiar() {
     cabeza = null;
     cola = null;
     tamanio = 0;
   }
-  
   void guardarEnArchivo(String nombreArchivo) {
     try {
       PrintWriter writer = new PrintWriter(new FileWriter(sketchPath(nombreArchivo), false));
@@ -124,7 +119,6 @@ class ListaEnlazadaEventos {
       println("Error al guardar lista en archivo: " + e.getMessage());
     }
   }
-  
   ArrayList<String> obtenerUltimos(int n) {
     ArrayList<String> ultimos = new ArrayList<String>();
     
@@ -184,7 +178,7 @@ void setup() {
   if (puerto != null) {
     puerto.write("GET_STATUS\n");
     // NUEVO: Enviar contraseña a Arduino
-    enviarContrasenaArduino();
+    //enviarContrasenaArduino();
   }
 }
 void draw() {
@@ -251,7 +245,7 @@ void guardarContrasena() {
 void enviarContrasenaArduino() {
   if (puerto != null) {
     puerto.write("SET_PASS:" + contrasenaActual + "\n");
-    println("Contraseña enviada a Arduino");
+    println("Contraseña enviada a Arduino: ****");
   }
 }
 ///
@@ -665,18 +659,46 @@ void procesarDatosSerial(String datos) {
     
     // Detectar eventos de bloqueo desde Arduino
     if (evento.contains("SISTEMA_BLOQUEADO_CAMBIO_PASS_ALARMA_ACTIVADA")) {
-      // Sincronizar el bloqueo en Processing (informativo)
       agregarEvento("SOFTWARE: Arduino bloqueado por intentos fallidos de cambio de contraseña");
     }
   }
+  else if (datos.startsWith("INIT_PASS:")) {
+    // Sincronización inicial de contraseña desde Arduino (al conectar)
+    String passArduino = datos.substring(10).trim();
+    println("DEBUG: Contraseña inicial de Arduino: " + passArduino.length() + " caracteres");
+    
+    if (passArduino.length() == 4) {
+      // Verificar si es diferente a la que tenemos
+      if (!passArduino.equals(contrasenaActual)) {
+        println("DEBUG: Sincronizando contraseña de Arduino con Processing");
+        contrasenaActual = passArduino;
+        guardarContrasena();
+        agregarEvento("SOFTWARE: Contraseña sincronizada desde Arduino");
+      } else {
+        println("DEBUG: Contraseñas ya sincronizadas");
+        agregarEvento("SOFTWARE: Contraseñas sincronizadas correctamente");
+      }
+    }
+  }
   else if (datos.startsWith("NEW_PASS:")) {
-    // NUEVO: Recibir nueva contraseña desde Arduino
+    // Recibir nueva contraseña desde Arduino (cuando se cambia desde teclado físico)
     String nuevaPass = datos.substring(9).trim();
+    println("DEBUG: Contraseña recibida de Arduino: " + nuevaPass.length() + " caracteres");
+    
     if (nuevaPass.length() == 4) {
       contrasenaActual = nuevaPass;
       guardarContrasena();
-      agregarEvento("HARDWARE: Contraseña cambiada desde teclado físico");
+      // NO reenviar a Arduino aquí, Arduino ya la tiene
+      agregarEvento("HARDWARE: Contraseña cambiada desde teclado físico exitosamente");
+      println("DEBUG: Contraseña guardada en archivo");
+    } else {
+      println("ERROR: Contraseña recibida tiene longitud incorrecta: " + nuevaPass.length());
+      agregarEvento("ERROR: Contraseña recibida con formato incorrecto");
     }
+  }
+  else if (datos.startsWith("DEBUG:")) {
+    // Mensajes de depuración desde Arduino
+    println("Arduino Debug: " + datos.substring(7));
   }
 }
 ///
