@@ -2,15 +2,22 @@
 #include <Keypad.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
+#include <EEPROM.h>
+
 // Definiciones de pines
 #define BUZZER_PIN 13
 #define SENSOR_OTROS_PIN 12
 #define SENSOR_PIR2_PIN 3
 #define SENSOR_PIR1_PIN 2
 
+// Direcciones EEPROM
+#define EEPROM_PASS_ADDR 0
+#define EEPROM_MAGIC_ADDR 4
+#define EEPROM_MAGIC_VALUE 0xAB
+
 // Constantes para Keypad
-const int FILAS = 4;
-const int COLUMNAS = 4;
+const byte FILAS = 4;
+const byte COLUMNAS = 4;
 char TECLADO[FILAS][COLUMNAS] = {
   {'1', '2', '3', 'A'},
   {'4', '5', '6', 'B'},
@@ -27,38 +34,68 @@ Keypad pad = Keypad(makeKeymap(TECLADO), FILAS_PINS, COLUMNAS_PINS, FILAS, COLUM
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 //Variables de contraseña
-char contrasena [4];
-char ingresado[5] = "";
+char contrasena[4];
+char ingresado[4];
 bool cambiandoContrasena = false;
-char nuevaContrasena[5] = {0, 0, 0, 0, 0};
-char contrasenaVerificacion[5] = {0, 0, 0, 0, 0};
-int contNuevaPass = 0;
-int faseCambioPass = 0; // 0 = verificar actual, 1 = ingresar nueva
-int intentosCambioPass = 0;
+char nuevaContrasena[4];
+char contrasenaVerificacion[4];
+byte contNuevaPass = 0;
+byte faseCambioPass = 0;
+byte intentosCambioPass = 0;
+
 //variables de estado 
 bool bloqueadoCambioPass = false;
 unsigned long tiempoBloqueoPass = 0;
-const unsigned long DURACION_BLOQUEO_PASS = 30000; // 30 segundos
-bool alarmaActivadaAntes = false; // Para restaurar estado después del bloqueo
-unsigned long tiempoPulsacionC = 0;
-const unsigned long TIEMPO_MANTENER_C = 3000; // 3 segundos
-int cont = 0;
-int intentos = 0;
+bool alarmaActivadaAntes = false;
+byte cont = 0;
+byte intentos = 0;
 bool alarmaActivada = false;
 bool alarmaDisparada = false;
 bool pidendoContrasena = false;
 char accion = ' ';
 
+// Variables para mensajes no bloqueantes
+unsigned long tiempoMensaje = 0;
+unsigned int duracionMensaje = 0;
+bool mostrandoMensaje = false;
+
 // Auto-activación por inactividad
 unsigned long ultimaDeteccion = 0;
-unsigned long TIEMPO_INACTIVIDAD_PARA_ACTIVAR = 3600000; // 1 hora por defecto
-bool autoActivacionHabilitada = false; // Controla si la auto-activación está habilitada
+unsigned long TIEMPO_INACTIVIDAD_PARA_ACTIVAR = 3600000UL;
+bool autoActivacionHabilitada = false;
 
-// Variables para comunicación serial
-char bufferSerial[64];
-String origenAccion = "HARDWARE"; // Puede ser "HARDWARE" o "SOFTWARE"
+// Variables para comunicación serial (buffer reducido)
+char bufferSerial[32];
+
 //Inclución de librería propia (Se añade al final por el uso de variables globales)
 #include "Funciones.h"
+
+// ====================================================================
+// FUNCIONES EEPROM
+// ====================================================================
+void guardarContrasenaEEPROM() {
+  for (byte i = 0; i < 4; i++) {
+    EEPROM.write(EEPROM_PASS_ADDR + i, contrasena[i]);
+  }
+  EEPROM.write(EEPROM_MAGIC_ADDR, EEPROM_MAGIC_VALUE);
+}
+
+void cargarContrasenaEEPROM() {
+  // Verificar si hay una contraseña guardada
+  if (EEPROM.read(EEPROM_MAGIC_ADDR) == EEPROM_MAGIC_VALUE) {
+    // Cargar contraseña desde EEPROM
+    for (byte i = 0; i < 4; i++) {
+      contrasena[i] = EEPROM.read(EEPROM_PASS_ADDR + i);
+    }
+  } else {
+    // Primera vez, establecer contraseña predeterminada 1234
+    contrasena[0] = '1';
+    contrasena[1] = '2';
+    contrasena[2] = '3';
+    contrasena[3] = '4';
+    guardarContrasenaEEPROM();
+  }
+}
 
 // ====================================================================
 // SETUP
@@ -66,49 +103,83 @@ String origenAccion = "HARDWARE"; // Puede ser "HARDWARE" o "SOFTWARE"
 void setup() {
   Serial.begin(9600);
   pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW); // Asegurar que el buzzer esté apagado
     
   lcd.init();
   lcd.backlight();
+  
+  // Cargar contraseña desde EEPROM
+  cargarContrasenaEEPROM();
+  
+  // Inicializar estados de alarma
+  alarmaActivada = false;
+  alarmaDisparada = false;
+  bloqueadoCambioPass = false;
+  
   mostrarEstado();
   ultimaDeteccion = millis();
   
-  // Enviar estado inicial
+  // Enviar estado inicial y contraseña a Processing
   delay(1000);
   enviarEstadoSerial();
-  enviarEvento("SISTEMA_INICIADO");
+  
+  // Enviar contraseña actual a Processing para sincronización inicial
+  Serial.print(F("INIT_PASS:"));
+  for (byte i = 0; i < 4; i++) {
+    Serial.print(contrasena[i]);
+  }
+  Serial.println();
+  
+  enviarEvento(F("SISTEMA_INICIADO"));
 }
 
 // ====================================================================
 // LOOP
 // ====================================================================
 void loop() {
-  // Leer comandos seriales
+  // Actualizar mensaje temporizado
+  if (mostrandoMensaje && (millis() - tiempoMensaje >= duracionMensaje)) {
+    mostrandoMensaje = false;
+    mostrarEstado();
+  }
+  
+  // Verificar bloqueo de cambio de contraseña
+  if (bloqueadoCambioPass) {
+    verificarCambioContrasena();
+    return; // No hacer nada más mientras está bloqueado
+  }
+  
+  // Leer comandos seriales (sin bloqueo)
   if (Serial.available() > 0) {
-    size_t bytesLeidos = Serial.readBytesUntil('\n', bufferSerial, 63);
+    byte bytesLeidos = Serial.readBytesUntil('\n', bufferSerial, 31);
     if (bytesLeidos > 0) {
       bufferSerial[bytesLeidos] = '\0';
       procesarComandoSerial(bufferSerial);
     }
   }
-  // Leer teclado físico
+  
+  // Leer tecla para acciones normales
   char tecla = pad.getKey();
   if (tecla != NO_KEY) {
-    origenAccion = "HARDWARE"; // Marcar que viene del teclado físico
-    if (pidendoContrasena) {
+    if (cambiandoContrasena) {
+      manejarCambioContrasena(tecla);
+    } else if (pidendoContrasena) {
       manejarContrasena(tecla);
     } else {
       manejarComando(tecla);
     }
   }
-  // Revisar sensores solo si alarma está activada
-  if (alarmaActivada) {
+  
+  // Revisar sensores
+  if (alarmaActivada && !bloqueadoCambioPass) {
     revisarSensores();
   } else {
-    if (autoActivacionHabilitada) {
+    if (autoActivacionHabilitada && !bloqueadoCambioPass) {
       verificarAutoActivacion();
     }
   }
-  // Hacer sonar el buzzer si la alarma está disparada
+  
+  // Hacer sonar el buzzer
   if (alarmaDisparada) {
     sonarBuzzerIntermitente();
   }
