@@ -1,10 +1,9 @@
 // Clase para Sensor PIR
 class SensorPIR {
 private:
-  int pin;
+  byte pin;
 public:
-  SensorPIR(int p) {
-    pin = p;
+  SensorPIR(byte p) : pin(p) {
     pinMode(pin, INPUT);
   }
 
@@ -16,6 +15,7 @@ public:
     return false;
   }
 };
+
 // Objetos de sensores PIR
 SensorPIR pir1(SENSOR_PIR1_PIN);
 SensorPIR pir2(SENSOR_PIR2_PIN);
@@ -28,12 +28,13 @@ void manejarContrasena(char tecla);
 void manejarCambioContrasena(char tecla);
 void verificarContrasena();
 void revisarSensores();
-void mostrarMensaje(String mensaje, int tiempo);
+void mostrarMensaje(const __FlashStringHelper* mensaje, unsigned int tiempo);
 void sonarBuzzerIntermitente();
 void verificarAutoActivacion();
 void procesarComandoSerial(char* comando);
 void enviarEstadoSerial();
-void enviarEvento(String evento);
+void enviarEvento(const __FlashStringHelper* evento);
+void guardarContrasenaEEPROM();
 
 // ====================================================================
 // Funciones de Comunicación Serial
@@ -53,53 +54,63 @@ void procesarComandoSerial(char* comando) {
     } else {
       manejarComando(tecla);
     }
-    delay(100);
+    delay(50);
     enviarEstadoSerial();
   }
   else if (strncmp(comando, "SET_AUTO:", 9) == 0) {
-    origenAccion = "SOFTWARE";
     int valor = atoi(&comando[9]);
     autoActivacionHabilitada = (valor == 1);
-    enviarEvento(autoActivacionHabilitada ? "AUTO_ACTIVACION_HABILITADA" : "AUTO_ACTIVACION_DESHABILITADA");
+    enviarEvento(autoActivacionHabilitada ? F("AUTO_ACTIVACION_HABILITADA") : F("AUTO_ACTIVACION_DESHABILITADA"));
     enviarEstadoSerial();
   }
   else if (strncmp(comando, "SET_TIME:", 9) == 0) {
-    origenAccion = "SOFTWARE";
     int minutos = atoi(&comando[9]);
-    TIEMPO_INACTIVIDAD_PARA_ACTIVAR = (unsigned long)minutos * 60000;
-    enviarEvento("TIEMPO_INACTIVIDAD_CONFIGURADO:" + String(minutos));
+    TIEMPO_INACTIVIDAD_PARA_ACTIVAR = (unsigned long)minutos * 60000UL;
     enviarEstadoSerial();
   }
   else if (strncmp(comando, "SET_PASS:", 9) == 0) {
-    // Recibir nueva contraseña desde Processing
-    for (int i = 0; i < 4; i++) {
-      contrasena[i] = comando[9 + i];
+    // Recibir nueva contraseña desde Processing (solo cuando Processing la cambia)
+    char nuevaPassTemp[4];
+    for (byte i = 0; i < 4; i++) {
+      nuevaPassTemp[i] = comando[9 + i];
     }
-    enviarEvento("CONTRASENA_ACTUALIZADA_DESDE_SOFTWARE");
-    mostrarMensaje("Clave guardada!", 2000);
+    
+    // Verificar si es diferente a la actual para evitar loops
+    bool esDiferente = false;
+    for (byte i = 0; i < 4; i++) {
+      if (nuevaPassTemp[i] != contrasena[i]) {
+        esDiferente = true;
+        break;
+      }
+    }
+    
+    if (esDiferente) {
+      for (byte i = 0; i < 4; i++) {
+        contrasena[i] = nuevaPassTemp[i];
+      }
+      guardarContrasenaEEPROM();
+      enviarEvento(F("CONTRASENA_ACTUALIZADA_DESDE_SOFTWARE"));
+      mostrarMensaje(F("Clave guardada!"), 2000);
+    }
   }
 }
-////
+
 void enviarEstadoSerial() {
-  // Formato: STATUS:alarmaActivada,alarmaDisparada,autoActivacionHabilitada,tiempoInactividad
-  Serial.print("STATUS:");
-  Serial.print(alarmaActivada ? "Activa" : "Inactiva");
-  Serial.print(",");
-  Serial.print(alarmaDisparada ? "Disparada" : "No disparada");
-  Serial.print(",");
-  Serial.print(autoActivacionHabilitada ? "Autoactivacion ON" : "Autoactivacion OFF");
-  Serial.print(",");
-  Serial.println(TIEMPO_INACTIVIDAD_PARA_ACTIVAR / 60000); // Enviar en minutos
+  Serial.print(F("STATUS:"));
+  Serial.print(alarmaActivada ? F("Activa") : F("Inactiva"));
+  Serial.print(F(","));
+  Serial.print(alarmaDisparada ? F("Disparada") : F("No disparada"));
+  Serial.print(F(","));
+  Serial.print(autoActivacionHabilitada ? F("Autoactivacion ON") : F("Autoactivacion OFF"));
+  Serial.print(F(","));
+  Serial.println(TIEMPO_INACTIVIDAD_PARA_ACTIVAR / 60000UL);
 }
-////
-void enviarEvento(String evento) {
-  Serial.print("EVENT:");
-  Serial.print(origenAccion);
-  Serial.print(":");
+
+void enviarEvento(const __FlashStringHelper* evento) {
+  Serial.print(F("EVENT:HARDWARE:"));
   Serial.println(evento);
-  // Resetear origen a HARDWARE por defecto después de enviar
-  origenAccion = "HARDWARE";
 }
+
 // ====================================================================
 // Funciones de Alarma y Sensores
 // ====================================================================
@@ -109,60 +120,73 @@ void revisarSensores() {
       alarmaDisparada = true;
       lcd.clear();
       lcd.setCursor(0, 0);
-      lcd.print("INTRUSION!");
+      lcd.print(F("INTRUSION!"));
       lcd.setCursor(0, 1);
-      lcd.print("D=Desactivar");
-      enviarEvento("INTRUSION_DETECTADA");
+      lcd.print(F("D=Desactivar"));
+      enviarEvento(F("INTRUSION_DETECTADA"));
       enviarEstadoSerial();
     }
   }
 }
-////
+
 void verificarAutoActivacion() {
   if (!alarmaActivada && !pidendoContrasena) {
     if (millis() - ultimaDeteccion > TIEMPO_INACTIVIDAD_PARA_ACTIVAR) {
-      // Auto-activar la alarma
       alarmaActivada = true;
       alarmaDisparada = false;
       lcd.clear();
       lcd.setCursor(0, 0);
-      lcd.print("AUTO-ACTIVADA!");
+      lcd.print(F("AUTO-ACTIVADA!"));
       lcd.setCursor(0, 1);
-      lcd.print("Sistema armado");
-      delay(2000);
+      lcd.print(F("Sistema armado"));
       
-      enviarEvento("ALARMA_AUTO_ACTIVADA");
+      tiempoMensaje = millis();
+      duracionMensaje = 2000;
+      mostrandoMensaje = true;
+      
+      enviarEvento(F("ALARMA_AUTO_ACTIVADA"));
       enviarEstadoSerial();
-      mostrarEstado();
       
-      // Resetear timer
       ultimaDeteccion = millis();
     }
   }
 }
-////
+
 void sonarBuzzerIntermitente() {
   static unsigned long tiempoAnterior = 0;
-  const long intervalo = 200;
   static bool buzzerEstado = LOW;
 
-  if (millis() - tiempoAnterior >= intervalo) {
+  if (millis() - tiempoAnterior >= 200) {
     tiempoAnterior = millis();
     buzzerEstado = !buzzerEstado;
     digitalWrite(BUZZER_PIN, buzzerEstado);
   }
 }
+
 // ====================================================================
 // Funciones de Keypad y Contraseña
 // ====================================================================
 void manejarComando(char tecla) {
   ultimaDeteccion = millis();
   
-  // Detectar tecla C mantenida para cambiar contraseña
-  if (tecla == 'C') {
-    if (tiempoPulsacionC == 0) {
-      tiempoPulsacionC = millis();
-    }
+  if (tecla == 'C' && !bloqueadoCambioPass) {
+    // Iniciar cambio de contraseña con una sola pulsación
+    cambiandoContrasena = true;
+    faseCambioPass = 0;
+    contNuevaPass = 0;
+    intentosCambioPass = 0;
+    mostrandoMensaje = false;
+    
+    memset(contrasenaVerificacion, 0, 4);
+    memset(nuevaContrasena, 0, 4);
+    
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print(F("Clave actual:"));
+    lcd.setCursor(0, 1);
+    lcd.print(F("Clave: "));
+    
+    enviarEvento(F("INICIANDO_CAMBIO_CONTRASENA"));
   }
   else if (tecla == 'A' && !alarmaActivada) {
     solicitarContrasena('A');
@@ -171,85 +195,87 @@ void manejarComando(char tecla) {
     solicitarContrasena('D');
   }
   else if (tecla == 'A' && alarmaActivada) {
-    mostrarMensaje("Ya esta activa", 1500);
+    mostrarMensaje(F("Ya esta activa"), 1500);
   }
   else if (tecla == 'D' && !alarmaActivada) {
-    mostrarMensaje("Ya esta inactiva", 1500);
+    mostrarMensaje(F("Ya esta inactiva"), 1500);
+  }
+  else if (tecla == 'C' && bloqueadoCambioPass) {
+    mostrarMensaje(F("Bloqueado!"), 1500);
   }
 }
-////
+
 void solicitarContrasena(char nuevaAccion) {
   accion = nuevaAccion;
   pidendoContrasena = true;
   cont = 0;
-  memset(ingresado, 0, sizeof(ingresado));
+  memset(ingresado, 0, 4);
     
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("Ingrese clave:");
+  lcd.print(F("Ingrese clave:"));
   lcd.setCursor(0, 1);
-  lcd.print("Clave: ");
+  lcd.print(F("Clave: "));
   
-  enviarEvento(nuevaAccion == 'A' ? "SOLICITANDO_ACTIVACION" : "SOLICITANDO_DESACTIVACION");
+  enviarEvento(nuevaAccion == 'A' ? F("SOLICITANDO_ACTIVACION") : F("SOLICITANDO_DESACTIVACION"));
 }
-////
+
 void verificarCambioContrasena() {
-  // Verificar si está bloqueado por intentos fallidos
   if (bloqueadoCambioPass) {
-    if (millis() - tiempoBloqueoPass >= DURACION_BLOQUEO_PASS) {
-      // Finalizar bloqueo
+    if (millis() - tiempoBloqueoPass >= 30000UL) {
       bloqueadoCambioPass = false;
       intentosCambioPass = 0;
       
-      // Restaurar estado anterior de la alarma
       alarmaActivada = alarmaActivadaAntes;
       alarmaDisparada = false;
       digitalWrite(BUZZER_PIN, LOW);
       
       lcd.clear();
       lcd.setCursor(0, 0);
-      lcd.print("Bloqueo");
+      lcd.print(F("Bloqueo"));
       lcd.setCursor(0, 1);
-      lcd.print("Finalizado");
-      delay(2000);
+      lcd.print(F("Finalizado"));
       
-      enviarEvento("BLOQUEO_CAMBIO_PASS_FINALIZADO");
+      tiempoMensaje = millis();
+      duracionMensaje = 2000;
+      mostrandoMensaje = true;
+      
+      enviarEvento(F("BLOQUEO_CAMBIO_PASS_FINALIZADO"));
       enviarEstadoSerial();
-      mostrarEstado();
     } else {
-      // Actualizar cuenta regresiva en LCD
       static unsigned long ultimaActualizacion = 0;
       if (millis() - ultimaActualizacion >= 1000) {
         ultimaActualizacion = millis();
-        int segundosRestantes = (DURACION_BLOQUEO_PASS - (millis() - tiempoBloqueoPass)) / 1000;
+        byte segundosRestantes = (30000UL - (millis() - tiempoBloqueoPass)) / 1000;
         
         lcd.clear();
         lcd.setCursor(0, 0);
-        lcd.print("SISTEMA BLOQ!");
+        lcd.print(F("SISTEMA BLOQ!"));
         lcd.setCursor(0, 1);
-        lcd.print("INTRUSO! ");
+        lcd.print(F("INTRUSO! "));
         lcd.print(segundosRestantes);
-        lcd.print("s");
+        lcd.print(F("s"));
       }
+      
+      // Asegurar que el buzzer suene durante el bloqueo
+      sonarBuzzerIntermitente();
     }
-    return; // No permitir verificar tecla C mientras está bloqueado
+    return;
   }
 }
-////
+
 void manejarCambioContrasena(char tecla) {
   if (tecla >= '0' && tecla <= '9') {
     if (faseCambioPass == 0) {
-      // Fase 1: Verificar contraseña actual
       contrasenaVerificacion[contNuevaPass] = tecla;
       contNuevaPass++;
       
-      lcd.setCursor(6 + contNuevaPass - 1, 1);
+      lcd.setCursor(7 + contNuevaPass - 1, 1);
       lcd.print('*');
       
       if (contNuevaPass == 4) {
-        // Verificar si la contraseña actual es correcta
         bool correcta = true;
-        for (int i = 0; i < 4; i++) {
+        for (byte i = 0; i < 4; i++) {
           if (contrasenaVerificacion[i] != contrasena[i]) {
             correcta = false;
             break;
@@ -257,129 +283,118 @@ void manejarCambioContrasena(char tecla) {
         }
         
         if (correcta) {
-          // Contraseña correcta, pasar a la fase de nueva contraseña
           faseCambioPass = 1;
           contNuevaPass = 0;
           intentosCambioPass = 0;
-          memset(nuevaContrasena, 0, sizeof(nuevaContrasena));
+          memset(nuevaContrasena, 0, 4);
           
           lcd.clear();
           lcd.setCursor(0, 0);
-          lcd.print("Nueva clave:");
+          lcd.print(F("Nueva clave:"));
           lcd.setCursor(0, 1);
-          lcd.print("Clave: ");
-          enviarEvento("CONTRASENA_ACTUAL_VERIFICADA");
+          lcd.print(F("Clave: "));
+          enviarEvento(F("CONTRASENA_ACTUAL_VERIFICADA"));
         } else {
-          // Contraseña incorrecta
           intentosCambioPass++;
-          enviarEvento("VERIFICACION_FALLIDA_CAMBIO_PASS:INTENTO_" + String(intentosCambioPass));
+          enviarEvento(F("VERIFICACION_FALLIDA_CAMBIO_PASS"));
           
           if (intentosCambioPass >= 3) {
-            // BLOQUEAR SISTEMA Y ACTIVAR ALARMA DE SEGURIDAD
             bloqueadoCambioPass = true;
             tiempoBloqueoPass = millis();
             
-            // Guardar estado actual de la alarma
             alarmaActivadaAntes = alarmaActivada;
-            
-            // ACTIVAR ALARMA FORZADAMENTE
             alarmaActivada = true;
             alarmaDisparada = true;
             
             lcd.clear();
             lcd.setCursor(0, 0);
-            lcd.print("SISTEMA BLOQ!");
+            lcd.print(F("SISTEMA BLOQ!"));
             lcd.setCursor(0, 1);
-            lcd.print("INTRUSO! 30s");
+            lcd.print(F("INTRUSO! 30s"));
             
-            enviarEvento("SISTEMA_BLOQUEADO_CAMBIO_PASS_ALARMA_ACTIVADA");
+            enviarEvento(F("SISTEMA_BLOQUEADO_CAMBIO_PASS_ALARMA_ACTIVADA"));
             enviarEstadoSerial();
             
-            // Resetear y salir del modo cambio
             cambiandoContrasena = false;
             faseCambioPass = 0;
             contNuevaPass = 0;
-            memset(contrasenaVerificacion, 0, sizeof(contrasenaVerificacion));
-            memset(nuevaContrasena, 0, sizeof(nuevaContrasena));
+            memset(contrasenaVerificacion, 0, 4);
+            memset(nuevaContrasena, 0, 4);
           } else {
-            // Mostrar intentos restantes
             lcd.clear();
             lcd.setCursor(0, 0);
-            lcd.print("Clave incorrecta");
+            lcd.print(F("Clave incorrecta"));
             lcd.setCursor(0, 1);
-            lcd.print("Intentos: ");
+            lcd.print(F("Intentos: "));
             lcd.print(3 - intentosCambioPass);
-            delay(2000);
             
-            // Reintentar
+            tiempoMensaje = millis();
+            duracionMensaje = 2000;
+            mostrandoMensaje = true;
+            
             contNuevaPass = 0;
-            memset(contrasenaVerificacion, 0, sizeof(contrasenaVerificacion));
-            
-            lcd.clear();
-            lcd.setCursor(0, 0);
-            lcd.print("Clave actual:");
-            lcd.setCursor(0, 1);
-            lcd.print("Clave: ");
+            memset(contrasenaVerificacion, 0, 4);
           }
         }
       }
     }
     else if (faseCambioPass == 1) {
-      // Fase 2: Ingresar nueva contraseña
       nuevaContrasena[contNuevaPass] = tecla;
       contNuevaPass++;
       
-      lcd.setCursor(6 + contNuevaPass - 1, 1);
+      lcd.setCursor(7 + contNuevaPass - 1, 1);
       lcd.print('*');
       
       if (contNuevaPass == 4) {
-        // Nueva contraseña completa
         lcd.clear();
         lcd.setCursor(0, 0);
-        lcd.print("Guardando...");
-        delay(500);
+        lcd.print(F("Guardando..."));
         
         // Copiar la nueva contraseña
-        for (int i = 0; i < 4; i++) {
+        for (byte i = 0; i < 4; i++) {
           contrasena[i] = nuevaContrasena[i];
         }
         
-        // Enviar al Processing para que la guarde
-        Serial.print("NEW_PASS:");
-        Serial.println(contrasena);
+        // Guardar en EEPROM
+        guardarContrasenaEEPROM();
         
-        mostrarMensaje("Clave cambiada!", 2000);
-        enviarEvento("CONTRASENA_CAMBIADA_DESDE_HARDWARE");
+        // Enviar al Processing
+        Serial.print(F("NEW_PASS:"));
+        for (byte i = 0; i < 4; i++) {
+          Serial.print(contrasena[i]);
+        }
+        Serial.println();
         
-        // Resetear variables
+        mostrarMensaje(F("Clave cambiada!"), 2000);
+        enviarEvento(F("CONTRASENA_CAMBIADA_EXITOSAMENTE"));
+        
         cambiandoContrasena = false;
         faseCambioPass = 0;
         contNuevaPass = 0;
         intentosCambioPass = 0;
-        memset(contrasenaVerificacion, 0, sizeof(contrasenaVerificacion));
-        memset(nuevaContrasena, 0, sizeof(nuevaContrasena));
+        memset(contrasenaVerificacion, 0, 4);
+        memset(nuevaContrasena, 0, 4);
       }
     }
   }
   else if (tecla == '#') {
-    // Cancelar cambio de contraseña
     cambiandoContrasena = false;
     faseCambioPass = 0;
     contNuevaPass = 0;
     intentosCambioPass = 0;
-    memset(contrasenaVerificacion, 0, sizeof(contrasenaVerificacion));
-    memset(nuevaContrasena, 0, sizeof(nuevaContrasena));
-    mostrarMensaje("Cancelado", 1500);
-    enviarEvento("CAMBIO_CONTRASENA_CANCELADO");
+    memset(contrasenaVerificacion, 0, 4);
+    memset(nuevaContrasena, 0, 4);
+    mostrarMensaje(F("Cancelado"), 1500);
+    enviarEvento(F("CAMBIO_CONTRASENA_CANCELADO"));
   }
 }
-////
+
 void manejarContrasena(char tecla) {
   if (tecla >= '0' && tecla <= '9') {
     ingresado[cont] = tecla;
     cont++;
         
-    lcd.setCursor(6 + cont - 1, 1);
+    lcd.setCursor(7 + cont - 1, 1);
     lcd.print('*');
         
     if (cont == 4) {
@@ -388,14 +403,14 @@ void manejarContrasena(char tecla) {
   }
   else if (tecla == '#') {
     pidendoContrasena = false;
-    enviarEvento("INGRESO_CANCELADO");
+    enviarEvento(F("INGRESO_CANCELADO"));
     mostrarEstado();
   }
 }
-////
+
 void verificarContrasena() {
   bool correcta = true;
-  for (int i = 0; i < 4; i++) {
+  for (byte i = 0; i < 4; i++) {
     if (ingresado[i] != contrasena[i]) {
       correcta = false;
       break;
@@ -406,39 +421,42 @@ void verificarContrasena() {
     if (accion == 'A') {
       alarmaActivada = true;
       alarmaDisparada = false;
-      mostrarMensaje("ACTIVADA!", 2000);
-      enviarEvento("ALARMA_ACTIVADA");
+      mostrarMensaje(F("ACTIVADA!"), 2000);
+      enviarEvento(F("ALARMA_ACTIVADA"));
     } else {
       alarmaActivada = false;
       alarmaDisparada = false;
       digitalWrite(BUZZER_PIN, LOW);
-      mostrarMensaje("DESACTIVADA!", 2000);
-      enviarEvento("ALARMA_DESACTIVADA");
+      mostrarMensaje(F("DESACTIVADA!"), 2000);
+      enviarEvento(F("ALARMA_DESACTIVADA"));
       ultimaDeteccion = millis();
     }
     intentos = 0;
     enviarEstadoSerial();
   } else {
     intentos++;
-    enviarEvento("CLAVE_INCORRECTA:INTENTO_" + String(intentos));
+    enviarEvento(F("CLAVE_INCORRECTA"));
     if (intentos >= 3) {
-      mostrarMensaje("Bloqueado 10s", 10000);
-      enviarEvento("SISTEMA_BLOQUEADO");
+      mostrarMensaje(F("Bloqueado 10s"), 10000);
+      enviarEvento(F("SISTEMA_BLOQUEADO"));
       intentos = 0;
     } else {
       lcd.clear();
       lcd.setCursor(0, 0);
-      lcd.print("Clave Incorrecta");
+      lcd.print(F("Clave Incorrecta"));
       lcd.setCursor(0, 1);
-      lcd.print("Intentos: ");
+      lcd.print(F("Intentos: "));
       lcd.print(3 - intentos);
-      delay(2000);
+      
+      tiempoMensaje = millis();
+      duracionMensaje = 2000;
+      mostrandoMensaje = true;
     }
   }
     
   pidendoContrasena = false;
-  mostrarEstado();
-} 
+}
+
 // ====================================================================
 // Funciones de Display
 // ====================================================================
@@ -446,22 +464,24 @@ void mostrarEstado() {
   lcd.clear();
   lcd.setCursor(0, 0);
   if (alarmaDisparada) {
-    lcd.print("ALRMA: INTRUSION!");
+    lcd.print(F("ALRMA: INTRUSION!"));
   } else {
     if (alarmaActivada) {
-      lcd.print("ALARMA: ACTIVADA");
+      lcd.print(F("ALARMA: ACTIVADA"));
     } else {
-      lcd.print("ALARMA: INACTIVA");
+      lcd.print(F("ALARMA: INACTIVA"));
     }
   }
   lcd.setCursor(0, 1);
-  lcd.print("A=Act D=Desact");
+  lcd.print(F("A=Act D=Desact"));
 }
-////
-void mostrarMensaje(String mensaje, int tiempo) {
+
+void mostrarMensaje(const __FlashStringHelper* mensaje, unsigned int tiempo) {
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print(mensaje);
-  delay(tiempo);
-  mostrarEstado();
+  
+  tiempoMensaje = millis();
+  duracionMensaje = tiempo;
+  mostrandoMensaje = true;
 }
